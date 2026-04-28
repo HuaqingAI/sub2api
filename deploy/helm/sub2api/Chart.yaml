@@ -1,0 +1,12 @@
+apiVersion: v2
+name: sub2api
+description: A Helm chart for deploying Sub2API on Kubernetes
+type: application
+version: 0.1.0
+appVersion: "latest"
+home: https://github.com/Wei-Shaw/sub2api
+sources:
+  - https://github.com/Wei-Shaw/sub2api
+maintainers:
+  - name: Wei-Shaw
+    url: https://github.com/Wei-Shaw

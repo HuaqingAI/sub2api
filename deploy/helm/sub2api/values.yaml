@@ -1,0 +1,215 @@
+# Default values for the Sub2API Helm chart.
+# This chart mirrors the Docker Compose deployment defaults while exposing
+# Kubernetes-native service, persistence, secret, and ingress settings.
+
+replicaCount: 1
+
+image:
+  repository: weishaw/sub2api
+  pullPolicy: IfNotPresent
+  tag: latest
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+commonLabels: {}
+podLabels: {}
+podAnnotations: {}
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+  automountServiceAccountToken: false
+
+podSecurityContext: {}
+securityContext: {}
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    []
+    # - host: sub2api.example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+  tls: []
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  annotations: {}
+
+app:
+  autoSetup: true
+  runMode: standard
+  timezone: Asia/Shanghai
+  adminEmail: admin@sub2api.local
+  jwtExpireHour: 24
+  server:
+    host: 0.0.0.0
+    port: 8080
+    mode: release
+  database:
+    sslMode: disable
+    maxOpenConns: 50
+    maxIdleConns: 10
+    connMaxLifetimeMinutes: 30
+    connMaxIdleTimeMinutes: 5
+  redis:
+    db: 0
+    poolSize: 1024
+    minIdleConns: 10
+    enableTLS: false
+  gemini:
+    oauthClientId: ""
+    oauthClientSecret: ""
+    oauthScopes: ""
+    quotaPolicy: ""
+    cliOauthClientSecret: ""
+    antigravityOauthClientSecret: ""
+  security:
+    urlAllowlist:
+      enabled: false
+      allowInsecureHTTP: false
+      allowPrivateHosts: false
+      upstreamHosts: ""
+  update:
+    proxyURL: ""
+
+# Append additional environment variables to the Sub2API container.
+extraEnv: []
+  # - name: LOG_LEVEL
+  #   value: info
+
+envFrom: []
+  # - secretRef:
+  #     name: sub2api-extra-env
+
+secrets:
+  app:
+    # Existing secret must contain keys: jwt-secret, totp-encryption-key,
+    # and admin-password.
+    existingSecret: ""
+    # jwtSecret must be at least 32 bytes. totpEncryptionKey must be
+    # 64 hex characters, for example: openssl rand -hex 32.
+    jwtSecret: ""
+    totpEncryptionKey: ""
+    adminPassword: ""
+    generateAdminPassword: true
+  postgresql:
+    # Existing secret must contain key: postgres-password.
+    existingSecret: ""
+    password: ""
+  redis:
+    # Existing secret must contain key: redis-password.
+    existingSecret: ""
+    password: ""
+    generatePassword: false
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    pullPolicy: IfNotPresent
+    tag: 18-alpine
+  auth:
+    username: sub2api
+    database: sub2api
+  service:
+    port: 5432
+    annotations: {}
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    annotations: {}
+  podLabels: {}
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalPostgresql:
+  host: ""
+  port: 5432
+  username: sub2api
+  password: ""
+  database: sub2api
+  sslMode: disable
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    pullPolicy: IfNotPresent
+    tag: 8-alpine
+  service:
+    port: 6379
+    annotations: {}
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+    annotations: {}
+  podLabels: {}
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  resources: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+externalRedis:
+  host: ""
+  port: 6379
+  password: ""
+
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  startup:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30

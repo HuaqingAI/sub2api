@@ -1,12 +1,13 @@
 # Sub2API Deployment Files
 
-This directory contains files for deploying Sub2API on Linux servers.
+This directory contains files for deploying Sub2API on Linux servers and Kubernetes clusters.
 
 ## Deployment Methods
 
 | Method | Best For | Setup Wizard |
 |--------|----------|--------------|
 | **Docker Compose** | Quick setup, all-in-one | Not needed (auto-setup) |
+| **Helm / Kubernetes** | Kubernetes clusters | Not needed (auto-setup) |
 | **Binary Install** | Production servers, systemd | Web-based wizard |
 
 ## Files
@@ -16,6 +17,7 @@ This directory contains files for deploying Sub2API on Linux servers.
 | `docker-compose.yml` | Docker Compose configuration (named volumes) |
 | `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
 | `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
+| `helm/sub2api/` | Helm chart for Kubernetes deployment |
 | `.env.example` | Docker environment variables template |
 | `DOCKER.md` | Docker Hub documentation |
 | `install.sh` | One-click binary installation script |
@@ -246,6 +248,184 @@ docker compose -f docker-compose.local.yml up -d
 ```
 
 Your entire deployment (configuration + data) is migrated!
+
+---
+
+## Helm / Kubernetes Deployment
+
+Use the first-party Helm chart when deploying Sub2API to Kubernetes. The chart defaults mirror the Docker Compose setup:
+
+- Sub2API image: `weishaw/sub2api:latest`
+- Bundled PostgreSQL: `postgres:18-alpine`
+- Bundled Redis: `redis:8-alpine`
+- `AUTO_SETUP=true`
+- Persistent volumes for Sub2API data, PostgreSQL data, and Redis data
+- `/health` probes for the application
+
+### Install
+
+```bash
+# From the repository root
+helm install sub2api deploy/helm/sub2api --namespace sub2api --create-namespace
+
+# Local access without ingress
+kubectl -n sub2api port-forward svc/sub2api 8080:8080
+```
+
+Open `http://127.0.0.1:8080`.
+
+The chart creates stable secrets by default. To read the generated admin password:
+
+```bash
+kubectl -n sub2api get secret sub2api-app \
+  -o jsonpath='{.data.admin-password}' | base64 -d
+```
+
+### Recommended Production Values
+
+Create a private `values.yaml` and set fixed credentials before first install:
+
+```yaml
+secrets:
+  app:
+    jwtSecret: "replace-with-output-of-openssl-rand-hex-32"
+    totpEncryptionKey: "replace-with-output-of-openssl-rand-hex-32"
+    adminPassword: "replace-with-a-strong-password"
+  postgresql:
+    password: "replace-with-a-strong-postgres-password"
+  redis:
+    password: "replace-with-a-strong-redis-password"
+    generatePassword: true
+```
+
+Then install or upgrade with:
+
+```bash
+helm upgrade --install sub2api deploy/helm/sub2api \
+  --namespace sub2api --create-namespace \
+  -f values.yaml
+```
+
+### Existing Secrets
+
+If your platform manages secrets separately, point the chart at existing Kubernetes secrets:
+
+```yaml
+secrets:
+  app:
+    existingSecret: sub2api-app-secret
+  postgresql:
+    existingSecret: sub2api-postgres-secret
+  redis:
+    existingSecret: sub2api-redis-secret
+```
+
+Required keys:
+
+| Secret | Required Keys |
+|--------|---------------|
+| `secrets.app.existingSecret` | `jwt-secret`, `totp-encryption-key`, `admin-password` |
+| `secrets.postgresql.existingSecret` | `postgres-password` |
+| `secrets.redis.existingSecret` | `redis-password` |
+
+### External PostgreSQL and Redis
+
+Disable bundled services when using managed databases or shared cluster services:
+
+```yaml
+postgresql:
+  enabled: false
+externalPostgresql:
+  host: postgres.example.internal
+  port: 5432
+  username: sub2api
+  password: "replace-with-postgres-password"
+  database: sub2api
+  sslMode: require
+
+redis:
+  enabled: false
+externalRedis:
+  host: redis.example.internal
+  port: 6379
+  password: "replace-with-redis-password"
+```
+
+### Ingress
+
+Ingress is disabled by default and does not assume a specific controller:
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: sub2api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: sub2api-tls
+      hosts:
+        - sub2api.example.com
+```
+
+### Persistence
+
+PVCs are enabled by default:
+
+```yaml
+persistence:
+  size: 10Gi
+postgresql:
+  persistence:
+    size: 20Gi
+redis:
+  persistence:
+    size: 8Gi
+```
+
+To use an existing claim:
+
+```yaml
+persistence:
+  existingClaim: sub2api-data
+```
+
+To run with ephemeral storage for testing only:
+
+```yaml
+persistence:
+  enabled: false
+postgresql:
+  persistence:
+    enabled: false
+redis:
+  persistence:
+    enabled: false
+```
+
+> Warning: disabling persistence uses `emptyDir`; data will not survive pod rescheduling.
+
+### Upgrade and Uninstall
+
+```bash
+# Upgrade
+helm upgrade sub2api deploy/helm/sub2api -n sub2api -f values.yaml
+
+# Uninstall release
+helm uninstall sub2api -n sub2api
+
+# Remove PVCs only if you intentionally want to delete stored data
+kubectl -n sub2api delete pvc -l app.kubernetes.io/instance=sub2api
+```
+
+### Helm Validation
+
+```bash
+helm lint deploy/helm/sub2api
+helm template sub2api deploy/helm/sub2api
+```
 
 ---
 
