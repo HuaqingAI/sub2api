@@ -1,0 +1,76 @@
+# Example values for deploy/helm/sub2api.
+# Copy this file to helm-values.yaml or run ./helm-deploy.sh to generate a
+# local helm-values.yaml with fixed secrets.
+
+image:
+  repository: weishaw/sub2api
+  tag: latest
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  hosts:
+    # - host: sub2api.example.com
+    #   paths:
+    #     - path: /
+    #       pathType: Prefix
+  tls: []
+
+persistence:
+  enabled: true
+  size: 10Gi
+
+app:
+  runMode: standard
+  timezone: Asia/Shanghai
+  adminEmail: admin@sub2api.local
+
+secrets:
+  app:
+    # Leave empty to let Helm generate and reuse chart-managed secrets.
+    # For production, set fixed values or run ./helm-deploy.sh.
+    jwtSecret: ""
+    # Must be 64 hex characters, for example: openssl rand -hex 32
+    totpEncryptionKey: ""
+    adminPassword: ""
+    generateAdminPassword: true
+  postgresql:
+    password: ""
+  redis:
+    # Leave blank for no Redis password. Set a password for production.
+    password: ""
+    generatePassword: false
+
+postgresql:
+  enabled: true
+  auth:
+    username: sub2api
+    database: sub2api
+  persistence:
+    enabled: true
+    size: 20Gi
+
+redis:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 8Gi
+
+# To use external services, disable the bundled workloads and set hosts.
+externalPostgresql:
+  host: ""
+  port: 5432
+  username: sub2api
+  password: ""
+  database: sub2api
+  sslMode: disable
+
+externalRedis:
+  host: ""
+  port: 6379
+  password: ""
+
