@@ -11,7 +11,7 @@ redis_data/
 .env
 helm-values.yaml
 helm-values.*.yaml
-!helm-values.example.yaml
+!helm-values.simple.yaml
 
 # Backup files
 *.backup

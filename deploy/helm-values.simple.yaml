@@ -1,0 +1,35 @@
+# Simple values for deploy/helm/sub2api.
+# This file is intentionally small. Full defaults live in
+# deploy/helm/sub2api/values.yaml.
+
+image:
+  repository: weishaw/sub2api
+  tag: latest
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+
+persistence:
+  enabled: true
+  size: 10Gi
+
+app:
+  runMode: standard
+  timezone: Asia/Shanghai
+  adminEmail: admin@sub2api.local
+
+postgresql:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 20Gi
+
+redis:
+  enabled: true
+  persistence:
+    enabled: true
+    size: 8Gi

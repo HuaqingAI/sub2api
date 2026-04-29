@@ -18,8 +18,8 @@ This directory contains files for deploying Sub2API on Linux servers and Kuberne
 | `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
 | `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
 | `helm/sub2api/` | Helm chart for Kubernetes deployment |
-| `helm-values.example.yaml` | Example Helm values override file |
-| `helm-deploy.sh` | One-click Helm deployment script |
+| `helm-values.simple.yaml` | Simple Helm values override file |
+| `helm-deploy.sh` | Simple Helm deployment script |
 | `.env.example` | Docker environment variables template |
 | `DOCKER.md` | Docker Hub documentation |
 | `install.sh` | One-click binary installation script |
@@ -266,7 +266,7 @@ Use the first-party Helm chart when deploying Sub2API to Kubernetes. The chart d
 
 ### Install
 
-Use the helper script to generate a private `helm-values.yaml` with fixed secrets, then install or upgrade the release:
+Use the helper script to start Sub2API with the simple Helm values file:
 
 ```bash
 cd deploy
@@ -274,32 +274,22 @@ chmod +x helm-deploy.sh
 ./helm-deploy.sh
 ```
 
-The script uses these defaults:
-
-| Variable | Default |
-|----------|---------|
-| `RELEASE_NAME` | `sub2api` |
-| `NAMESPACE` | `sub2api` |
-| `CHART_DIR` | `deploy/helm/sub2api` |
-| `VALUES_FILE` | `deploy/helm-values.yaml` |
-| `IMAGE_TAG` | `latest` |
-
-For a dry run:
+It runs:
 
 ```bash
-cd deploy
-DRY_RUN=true ./helm-deploy.sh
+helm upgrade --install sub2api ./helm/sub2api \
+  --namespace sub2api \
+  --create-namespace \
+  -f ./helm-values.simple.yaml
 ```
 
 Manual install is also supported:
 
 ```bash
 # From the repository root
-cp deploy/helm-values.example.yaml deploy/helm-values.yaml
-# Edit deploy/helm-values.yaml and set fixed production secrets.
 helm upgrade --install sub2api deploy/helm/sub2api \
   --namespace sub2api --create-namespace \
-  -f deploy/helm-values.yaml
+  -f deploy/helm-values.simple.yaml
 
 # Local access without ingress
 kubectl -n sub2api port-forward svc/sub2api 8080:8080
@@ -316,7 +306,7 @@ kubectl -n sub2api get secret sub2api-app \
 
 ### Recommended Production Values
 
-Use `deploy/helm-values.example.yaml` as the small override file instead of editing the full chart `values.yaml`. At minimum, set fixed credentials before first install:
+Use `deploy/helm-values.simple.yaml` as a small override file instead of editing the full chart `values.yaml`. For production, copy it to a private values file and set fixed credentials before first install:
 
 ```yaml
 secrets:
@@ -336,7 +326,7 @@ Then install or upgrade with:
 ```bash
 helm upgrade --install sub2api deploy/helm/sub2api \
   --namespace sub2api --create-namespace \
-  -f deploy/helm-values.yaml
+  -f deploy/helm-values.production.yaml
 ```
 
 ### Existing Secrets
@@ -444,7 +434,7 @@ redis:
 
 ```bash
 # Upgrade
-helm upgrade sub2api deploy/helm/sub2api -n sub2api -f deploy/helm-values.yaml
+helm upgrade sub2api deploy/helm/sub2api -n sub2api -f deploy/helm-values.simple.yaml
 
 # Uninstall release
 helm uninstall sub2api -n sub2api
