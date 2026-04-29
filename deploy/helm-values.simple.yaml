@@ -2,9 +2,19 @@
 # This file is intentionally small. Full defaults live in
 # deploy/helm/sub2api/values.yaml.
 
+global:
+  imageRegistry: ""
+  defaultStorageClass: ""
+  security:
+    allowInsecureImages: false
+
 image:
   repository: weishaw/sub2api
   tag: latest
+
+waitForDependencies:
+  enabled: true
+  timeoutSeconds: 300
 
 service:
   type: ClusterIP
@@ -24,12 +34,22 @@ app:
 
 postgresql:
   enabled: true
-  persistence:
-    enabled: true
-    size: 20Gi
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
 
 redis:
   enabled: true
-  persistence:
-    enabled: true
-    size: 8Gi
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# Optional mihomo sidecar. It only exposes a local proxy inside the Sub2API Pod;
+# configure Sub2API's in-app proxy as http://127.0.0.1:7890 after install.
+mihomo:
+  enabled: false
+  config:
+    existingSecret: ""
+    key: config.yaml

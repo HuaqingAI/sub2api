@@ -36,9 +36,43 @@ spec:
       {{- with .Values.priorityClassName }}
       priorityClassName: {{ . | quote }}
       {{- end }}
+      {{- if .Values.waitForDependencies.enabled }}
+      initContainers:
+        - name: wait-for-dependencies
+          image: {{ include "sub2api.waitImage" . | quote }}
+          imagePullPolicy: {{ .Values.waitForDependencies.image.pullPolicy }}
+          {{- with .Values.waitForDependencies.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            - sh
+            - -ec
+            - |
+              deadline=$(( $(date +%s) + {{ .Values.waitForDependencies.timeoutSeconds }} ))
+              wait_for() {
+                name="$1"
+                host="$2"
+                port="$3"
+                until nc -z "$host" "$port"; do
+                  if [ "$(date +%s)" -ge "$deadline" ]; then
+                    echo "Timed out waiting for ${name} at ${host}:${port}" >&2
+                    exit 1
+                  fi
+                  echo "Waiting for ${name} at ${host}:${port}..."
+                  sleep {{ .Values.waitForDependencies.intervalSeconds }}
+                done
+              }
+              wait_for postgresql "{{ include "sub2api.postgresql.host" . }}" "{{ include "sub2api.postgresql.port" . }}"
+              wait_for redis "{{ include "sub2api.redis.host" . }}" "{{ include "sub2api.redis.port" . }}"
+          {{- with .Values.waitForDependencies.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- end }}
       containers:
         - name: sub2api
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: {{ include "sub2api.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.securityContext }}
           securityContext:
@@ -62,16 +96,16 @@ spec:
             - name: TZ
               value: {{ .Values.app.timezone | quote }}
             - name: DATABASE_HOST
-              value: {{ ternary (include "sub2api.postgresql.fullname" .) .Values.externalPostgresql.host .Values.postgresql.enabled | quote }}
+              value: {{ include "sub2api.postgresql.host" . | quote }}
             - name: DATABASE_PORT
-              value: {{ ternary .Values.postgresql.service.port .Values.externalPostgresql.port .Values.postgresql.enabled | quote }}
+              value: {{ include "sub2api.postgresql.port" . | quote }}
             - name: DATABASE_USER
               value: {{ ternary .Values.postgresql.auth.username .Values.externalPostgresql.username .Values.postgresql.enabled | quote }}
             - name: DATABASE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "sub2api.postgresql.secretName" . }}
-                  key: postgres-password
+                  key: {{ include "sub2api.postgresql.passwordKey" . }}
             - name: DATABASE_DBNAME
               value: {{ ternary .Values.postgresql.auth.database .Values.externalPostgresql.database .Values.postgresql.enabled | quote }}
             - name: DATABASE_SSLMODE
@@ -85,14 +119,19 @@ spec:
             - name: DATABASE_CONN_MAX_IDLE_TIME_MINUTES
               value: {{ .Values.app.database.connMaxIdleTimeMinutes | quote }}
             - name: REDIS_HOST
-              value: {{ ternary (include "sub2api.redis.fullname" .) .Values.externalRedis.host .Values.redis.enabled | quote }}
+              value: {{ include "sub2api.redis.host" . | quote }}
             - name: REDIS_PORT
-              value: {{ ternary .Values.redis.service.port .Values.externalRedis.port .Values.redis.enabled | quote }}
+              value: {{ include "sub2api.redis.port" . | quote }}
+            {{- if and .Values.redis.enabled (not .Values.redis.auth.enabled) }}
+            - name: REDIS_PASSWORD
+              value: ""
+            {{- else }}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ include "sub2api.redis.secretName" . }}
-                  key: redis-password
+                  key: {{ include "sub2api.redis.passwordKey" . }}
+            {{- end }}
             - name: REDIS_DB
               value: {{ .Values.app.redis.db | quote }}
             - name: REDIS_POOL_SIZE
@@ -186,6 +225,60 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- if .Values.mihomo.enabled }}
+        - name: mihomo
+          image: {{ include "sub2api.mihomoImage" . | quote }}
+          imagePullPolicy: {{ .Values.mihomo.image.pullPolicy }}
+          {{- with .Values.mihomo.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.mihomo.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.mihomo.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: mixed
+              containerPort: {{ .Values.mihomo.mixedPort }}
+              protocol: TCP
+            - name: controller
+              containerPort: {{ .Values.mihomo.controllerPort }}
+              protocol: TCP
+          {{- with .Values.mihomo.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: mihomo-config
+              mountPath: {{ .Values.mihomo.config.mountPath | quote }}
+              readOnly: true
+          {{- if .Values.mihomo.probes.liveness.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: mixed
+            initialDelaySeconds: {{ .Values.mihomo.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.mihomo.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.mihomo.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.mihomo.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.mihomo.probes.readiness.enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: mixed
+            initialDelaySeconds: {{ .Values.mihomo.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.mihomo.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.mihomo.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.mihomo.probes.readiness.failureThreshold }}
+          {{- end }}
+          {{- with .Values.mihomo.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -194,6 +287,14 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
+        {{- if .Values.mihomo.enabled }}
+        - name: mihomo-config
+          secret:
+            secretName: {{ .Values.mihomo.config.existingSecret }}
+            items:
+              - key: {{ .Values.mihomo.config.key }}
+                path: config.yaml
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -206,4 +307,3 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-

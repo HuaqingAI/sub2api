@@ -4,7 +4,24 @@
 
 replicaCount: 1
 
+global:
+  # Shared Docker registry for Sub2API and Bitnami dependency images.
+  # Example: registry.example.com/mirror
+  imageRegistry: ""
+  # Shared image pull secrets for Bitnami dependencies. For the Sub2API app,
+  # use imagePullSecrets below when Kubernetes object-form secrets are needed.
+  imagePullSecrets: []
+  # Shared StorageClass for Sub2API, PostgreSQL, and Redis PVCs.
+  defaultStorageClass: ""
+  # Deprecated Bitnami compatibility alias. Prefer defaultStorageClass.
+  storageClass: ""
+  security:
+    # Bitnami charts verify image names. Set true when using a private mirror
+    # or rewritten repository names for Bitnami dependency images.
+    allowInsecureImages: false
+
 image:
+  registry: ""
   repository: weishaw/sub2api
   pullPolicy: IfNotPresent
   tag: latest
@@ -12,6 +29,18 @@ image:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+
+waitForDependencies:
+  enabled: true
+  image:
+    registry: ""
+    repository: busybox
+    tag: "1.36"
+    pullPolicy: IfNotPresent
+  intervalSeconds: 2
+  timeoutSeconds: 300
+  resources: {}
+  securityContext: {}
 
 commonLabels: {}
 podLabels: {}
@@ -105,6 +134,47 @@ envFrom: []
   # - secretRef:
   #     name: sub2api-extra-env
 
+mihomo:
+  enabled: false
+  image:
+    registry: ""
+    repository: metacubex/mihomo
+    tag: latest
+    pullPolicy: IfNotPresent
+  # Mount an existing Secret that contains mihomo config.yaml. Keep node,
+  # subscription, and credential data out of Helm values.
+  config:
+    existingSecret: ""
+    key: config.yaml
+    mountPath: /etc/mihomo
+  # The sidecar does not inject HTTP_PROXY/HTTPS_PROXY into Sub2API.
+  # Configure Sub2API's in-app proxy as http://127.0.0.1:7890 or
+  # socks5h://127.0.0.1:7890 after the deployment starts.
+  mixedPort: 7890
+  controllerPort: 9090
+  command: []
+  args:
+    - -f
+    - /etc/mihomo/config.yaml
+  env: []
+  resources: {}
+  securityContext: {}
+  probes:
+    liveness:
+      # Keep disabled when mihomo binds to 127.0.0.1 only. Kubernetes TCP
+      # probes target the Pod IP and may fail against loopback-only listeners.
+      enabled: false
+      initialDelaySeconds: 10
+      periodSeconds: 30
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      enabled: false
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+
 secrets:
   app:
     # Existing secret must contain keys: jwt-secret, totp-encryption-key,
@@ -117,43 +187,58 @@ secrets:
     adminPassword: ""
     generateAdminPassword: true
   postgresql:
-    # Existing secret must contain key: postgres-password.
+    # External PostgreSQL fallback only. When bundled PostgreSQL is enabled,
+    # use postgresql.auth.existingSecret because Bitnami reads that key.
     existingSecret: ""
     password: ""
   redis:
-    # Existing secret must contain key: redis-password.
+    # External Redis fallback only. When bundled Redis is enabled, use
+    # redis.auth.existingSecret because Bitnami reads that key.
     existingSecret: ""
     password: ""
     generatePassword: false
 
 postgresql:
   enabled: true
+  # Native Bitnami PostgreSQL chart values. Extend this section with upstream
+  # options such as architecture=replication, readReplicas, metrics, initdb,
+  # image, resources, node selectors, tolerations, and affinity.
+  architecture: standalone
   image:
-    repository: postgres
-    pullPolicy: IfNotPresent
-    tag: 18-alpine
+    registry: registry-1.docker.io
+    repository: bitnami/postgresql
+    tag: latest
   auth:
     username: sub2api
+    # Set a fixed password before the first production install if PostgreSQL
+    # PVCs may be retained across uninstall/reinstall.
+    password: ""
     database: sub2api
-  service:
-    port: 5432
-    annotations: {}
-  persistence:
-    enabled: true
-    existingClaim: ""
-    storageClass: ""
-    accessModes:
-      - ReadWriteOnce
-    size: 20Gi
-    annotations: {}
-  podLabels: {}
-  podAnnotations: {}
-  podSecurityContext: {}
-  securityContext: {}
-  resources: {}
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
+    # Existing secret for bundled Bitnami PostgreSQL. This is the correct
+    # production secret entry when postgresql.enabled=true.
+    existingSecret: ""
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
+  primary:
+    persistence:
+      enabled: true
+      existingClaim: ""
+      storageClass: ""
+      accessModes:
+        - ReadWriteOnce
+      size: 20Gi
+      annotations: {}
+    service:
+      ports:
+        postgresql: 5432
+  connection:
+    # Override only when Sub2API must connect to a non-default PostgreSQL
+    # service or secret. Empty values use Bitnami chart defaults.
+    host: ""
+    port: ""
+    secretName: ""
+    passwordKey: ""
 
 externalPostgresql:
   host: ""
@@ -165,29 +250,46 @@ externalPostgresql:
 
 redis:
   enabled: true
+  # Native Bitnami Redis chart values. Extend this section with upstream
+  # options such as architecture=replication, replica counts, sentinel,
+  # image, metrics, resources, node selectors, tolerations, and affinity.
+  architecture: standalone
   image:
-    repository: redis
-    pullPolicy: IfNotPresent
-    tag: 8-alpine
-  service:
-    port: 6379
-    annotations: {}
-  persistence:
+    registry: registry-1.docker.io
+    repository: bitnami/redis
+    tag: latest
+  auth:
     enabled: true
-    existingClaim: ""
-    storageClass: ""
-    accessModes:
-      - ReadWriteOnce
-    size: 8Gi
-    annotations: {}
-  podLabels: {}
-  podAnnotations: {}
-  podSecurityContext: {}
-  securityContext: {}
-  resources: {}
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
+    # Set a fixed password before the first production install if Redis PVCs
+    # may be retained across uninstall/reinstall.
+    password: ""
+    # Existing secret for bundled Bitnami Redis. This is the correct
+    # production secret entry when redis.enabled=true.
+    existingSecret: ""
+    existingSecretPasswordKey: redis-password
+  master:
+    persistence:
+      enabled: true
+      existingClaim: ""
+      storageClass: ""
+      accessModes:
+        - ReadWriteOnce
+      size: 8Gi
+      annotations: {}
+    service:
+      ports:
+        redis: 6379
+  replica:
+    replicaCount: 1
+  sentinel:
+    enabled: false
+  connection:
+    # Override only when Sub2API must connect to a non-default Redis service
+    # or secret. Empty values use Bitnami chart defaults.
+    host: ""
+    port: ""
+    secretName: ""
+    passwordKey: ""
 
 externalRedis:
   host: ""

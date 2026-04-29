@@ -258,11 +258,43 @@ Your entire deployment (configuration + data) is migrated!
 Use the first-party Helm chart when deploying Sub2API to Kubernetes. The chart defaults mirror the Docker Compose setup:
 
 - Sub2API image: `weishaw/sub2api:latest`
-- Bundled PostgreSQL: `postgres:18-alpine`
-- Bundled Redis: `redis:8-alpine`
+- Bundled PostgreSQL: Bitnami PostgreSQL subchart, rendered as a StatefulSet
+- Bundled Redis: Bitnami Redis subchart, rendered as a StatefulSet
 - `AUTO_SETUP=true`
 - Persistent volumes for Sub2API data, PostgreSQL data, and Redis data
 - `/health` probes for the application
+
+The `postgresql:` and `redis:` values are native upstream Bitnami chart values, so operators can extend them for replication, Redis Sentinel, metrics, resources, scheduling, or other Bitnami-supported options. The Sub2API chart only adds small `connection` override blocks for cases where the application must connect to a non-default service or secret.
+
+When bundled PostgreSQL or Redis are enabled, Sub2API connects through Kubernetes Service DNS such as `sub2api-postgresql.sub2api.svc.cluster.local`. Startup also includes an init container that waits for PostgreSQL and Redis ports before the Sub2API container starts, avoiding first-boot crashes while the dependency StatefulSets are still becoming ready.
+
+For non-default dependency topologies, keep the upstream options under the same keys:
+
+```yaml
+postgresql:
+  architecture: replication
+  readReplicas:
+    replicaCount: 2
+
+redis:
+  architecture: replication
+  replica:
+    replicaCount: 2
+```
+
+If a topology exposes a different service or secret than the chart defaults, set `postgresql.connection.*` or `redis.connection.*` so the Sub2API application uses the correct endpoint. For Redis Sentinel, Bitnami requires `redis.architecture=replication` and can optionally expose a master-only service with `redis.sentinel.masterService.enabled=true` plus its documented RBAC/serviceAccount settings.
+
+Dependency waiting can be tuned or disabled:
+
+```yaml
+waitForDependencies:
+  enabled: true
+  timeoutSeconds: 300
+  intervalSeconds: 2
+  image:
+    repository: busybox
+    tag: "1.36"
+```
 
 ### Install
 
@@ -278,6 +310,7 @@ It runs:
 
 ```bash
 helm upgrade --install sub2api ./helm/sub2api \
+  --dependency-update \
   --namespace sub2api \
   --create-namespace \
   -f ./helm-values.simple.yaml
@@ -289,6 +322,7 @@ Manual install is also supported:
 # From the repository root
 helm upgrade --install sub2api deploy/helm/sub2api \
   --namespace sub2api --create-namespace \
+  --dependency-update \
   -f deploy/helm-values.simple.yaml
 
 # Local access without ingress
@@ -309,16 +343,45 @@ kubectl -n sub2api get secret sub2api-app \
 Use `deploy/helm-values.simple.yaml` as a small override file instead of editing the full chart `values.yaml`. For production, copy it to a private values file and set fixed credentials before first install:
 
 ```yaml
+global:
+  imageRegistry: "registry.example.com/mirror"
+  defaultStorageClass: "fast-storage"
+  security:
+    allowInsecureImages: true
+
 secrets:
   app:
     jwtSecret: "replace-with-output-of-openssl-rand-hex-32"
     totpEncryptionKey: "replace-with-output-of-openssl-rand-hex-32"
     adminPassword: "replace-with-a-strong-password"
-  postgresql:
+postgresql:
+  auth:
     password: "replace-with-a-strong-postgres-password"
-  redis:
+redis:
+  auth:
     password: "replace-with-a-strong-redis-password"
-    generatePassword: true
+```
+
+If you keep PostgreSQL or Redis PVCs across `helm uninstall` and reinstall, these fixed passwords are required. Bitnami stores database/cache credentials in the retained data directories; a new random password generated during reinstall will not match the existing data.
+
+`global.imageRegistry` is passed to the Bitnami PostgreSQL/Redis subcharts and is also used by the Sub2API image unless `image.registry` is set. Bitnami charts block unrecognized mirrored images unless `global.security.allowInsecureImages=true` is set. If your mirror rewrites image names, set the upstream image fields directly:
+
+```yaml
+image:
+  registry: crpi-dgkl9khr1943eg60.cn-hangzhou.personal.cr.aliyuncs.com
+  repository: hq-docker-mirror/weishaw-sub2api
+
+postgresql:
+  image:
+    registry: crpi-dgkl9khr1943eg60.cn-hangzhou.personal.cr.aliyuncs.com
+    repository: hq-docker-mirror/bitnami-postgresql
+    tag: latest
+
+redis:
+  image:
+    registry: crpi-dgkl9khr1943eg60.cn-hangzhou.personal.cr.aliyuncs.com
+    repository: hq-docker-mirror/bitnami-redis
+    tag: latest
 ```
 
 Then install or upgrade with:
@@ -337,19 +400,105 @@ If your platform manages secrets separately, point the chart at existing Kuberne
 secrets:
   app:
     existingSecret: sub2api-app-secret
-  postgresql:
+postgresql:
+  auth:
     existingSecret: sub2api-postgres-secret
-  redis:
+    secretKeys:
+      userPasswordKey: password
+      adminPasswordKey: postgres-password
+redis:
+  auth:
     existingSecret: sub2api-redis-secret
+    existingSecretPasswordKey: redis-password
 ```
+
+For bundled Bitnami PostgreSQL/Redis, do not put these two secrets under
+`secrets.postgresql.existingSecret` or `secrets.redis.existingSecret`. Those
+legacy keys are only for external PostgreSQL/Redis fallback secrets when the
+bundled dependency is disabled.
+
+Create the secrets before installing the chart:
+
+```bash
+kubectl create namespace sub2api --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n sub2api create secret generic sub2api-app-secret \
+  --from-literal=jwt-secret="$(openssl rand -hex 32)" \
+  --from-literal=totp-encryption-key="$(openssl rand -hex 32)" \
+  --from-literal=admin-password='replace-with-a-strong-admin-password'
+
+kubectl -n sub2api create secret generic sub2api-postgres-secret \
+  --from-literal=password='replace-with-a-strong-postgres-password' \
+  --from-literal=postgres-password='replace-with-a-strong-postgres-admin-password'
+
+kubectl -n sub2api create secret generic sub2api-redis-secret \
+  --from-literal=redis-password='replace-with-a-strong-redis-password'
+```
+
+The manually created secrets are not owned by the Helm release, so `helm uninstall`
+will not delete them. This is the recommended production pattern when PVCs are
+retained across uninstall/reinstall, because the retained PostgreSQL/Redis data
+must keep using the same passwords.
 
 Required keys:
 
 | Secret | Required Keys |
 |--------|---------------|
 | `secrets.app.existingSecret` | `jwt-secret`, `totp-encryption-key`, `admin-password` |
-| `secrets.postgresql.existingSecret` | `postgres-password` |
-| `secrets.redis.existingSecret` | `redis-password` |
+| `postgresql.auth.existingSecret` | `password` by default, or `postgresql.auth.secretKeys.userPasswordKey` |
+| `redis.auth.existingSecret` | `redis-password` by default, or `redis.auth.existingSecretPasswordKey` |
+
+For external PostgreSQL or Redis, the legacy `secrets.postgresql.existingSecret` and `secrets.redis.existingSecret` keys are still supported as fallback secrets.
+
+For bundled PostgreSQL/Redis, prefer either fixed `postgresql.auth.password` / `redis.auth.password` values or upstream Bitnami `existingSecret` settings before the first production install.
+
+If you use `postgresql.auth.existingSecret` or `redis.auth.existingSecret`, keep those secrets when retaining PVCs.
+
+### Mihomo Sidecar Proxy
+
+For clusters that need outbound proxy access, the chart can run a mihomo
+sidecar in the same Pod as Sub2API. This mode does not use TUN and does not
+inject `HTTP_PROXY` or `HTTPS_PROXY`; configure the proxy inside Sub2API after
+the Pod starts.
+
+Create a Kubernetes Secret that contains `config.yaml`:
+
+```bash
+kubectl -n sub2api create secret generic sub2api-mihomo-config \
+  --from-file=config.yaml=./mihomo-config.yaml
+```
+
+Recommended mihomo listener settings:
+
+```yaml
+mixed-port: 7890
+allow-lan: false
+bind-address: 127.0.0.1
+external-controller: 127.0.0.1:9090
+```
+
+Enable the sidecar:
+
+```yaml
+mihomo:
+  enabled: true
+  config:
+    existingSecret: sub2api-mihomo-config
+    key: config.yaml
+```
+
+Then add a proxy in the Sub2API admin UI and assign it to the accounts or
+providers that need overseas access:
+
+```text
+protocol: http
+host: 127.0.0.1
+port: 7890
+```
+
+If using SOCKS mode, use `socks5h` in Sub2API so DNS is resolved through the
+proxy. Keep mihomo subscription URLs and node credentials in the Secret, not in
+Helm values.
 
 ### External PostgreSQL and Redis
 
@@ -398,14 +547,18 @@ ingress:
 PVCs are enabled by default:
 
 ```yaml
+global:
+  defaultStorageClass: fast-storage
 persistence:
   size: 10Gi
 postgresql:
-  persistence:
-    size: 20Gi
+  primary:
+    persistence:
+      size: 20Gi
 redis:
-  persistence:
-    size: 8Gi
+  master:
+    persistence:
+      size: 8Gi
 ```
 
 To use an existing claim:
@@ -421,11 +574,13 @@ To run with ephemeral storage for testing only:
 persistence:
   enabled: false
 postgresql:
-  persistence:
-    enabled: false
+  primary:
+    persistence:
+      enabled: false
 redis:
-  persistence:
-    enabled: false
+  master:
+    persistence:
+      enabled: false
 ```
 
 > Warning: disabling persistence uses `emptyDir`; data will not survive pod rescheduling.
@@ -434,7 +589,7 @@ redis:
 
 ```bash
 # Upgrade
-helm upgrade sub2api deploy/helm/sub2api -n sub2api -f deploy/helm-values.simple.yaml
+helm upgrade sub2api deploy/helm/sub2api -n sub2api --dependency-update -f deploy/helm-values.simple.yaml
 
 # Uninstall release
 helm uninstall sub2api -n sub2api
@@ -443,9 +598,12 @@ helm uninstall sub2api -n sub2api
 kubectl -n sub2api delete pvc -l app.kubernetes.io/instance=sub2api
 ```
 
+If you uninstall but keep PVCs, reinstall with the same `postgresql.auth.password` and `redis.auth.password` values. If an older release used random generated passwords and the Bitnami secrets were deleted, you must recover the original passwords or reset them inside the retained PostgreSQL/Redis data before reinstalling.
+
 ### Helm Validation
 
 ```bash
+helm dependency update deploy/helm/sub2api
 helm lint deploy/helm/sub2api
 helm template sub2api deploy/helm/sub2api
 ```
