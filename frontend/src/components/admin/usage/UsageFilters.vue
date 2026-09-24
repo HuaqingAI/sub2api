@@ -78,6 +78,18 @@
           </div>
         </div>
 
+        <!-- Request ID Filter -->
+        <div v-if="showRequestId && mode !== 'ranking'" class="w-full sm:w-auto sm:min-w-[220px]">
+          <label class="input-label">{{ t('admin.usage.requestId') }}</label>
+          <input
+            v-model.trim="filters.request_id"
+            type="text"
+            class="input"
+            :placeholder="t('admin.usage.requestId')"
+            @input="emitChange"
+          />
+        </div>
+
         <!-- Model Filter -->
         <div class="w-full sm:w-auto sm:min-w-[220px]">
           <label class="input-label">{{ t('usage.model') }}</label>
@@ -214,6 +226,7 @@ interface Props {
   startDate: string
   endDate: string
   showActions?: boolean
+  showRequestId?: boolean
   modelOptions?: string[]
   /**
    * errors 模式:隐藏用量专属字段/按钮,显示错误类型+状态码(错误请求 tab 用)
@@ -226,6 +239,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   showActions: true,
+  showRequestId: false,
   mode: 'usage',
   flat: false
 })

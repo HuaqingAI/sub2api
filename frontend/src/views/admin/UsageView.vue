@@ -83,7 +83,7 @@
           </button>
         </div>
 
-        <UsageFilters v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel">
+        <UsageFilters v-model="filters" ref="usageFiltersRef" flat :mode="activeTab" show-request-id class="border-b border-gray-100 dark:border-dark-700/50" :start-date="startDate" :end-date="endDate" :exporting="exporting" :model-options="modelNameOptions" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel">
           <template #after-reset>
             <div v-if="activeTab !== 'ranking'" class="relative" ref="columnDropdownRef">
               <button
@@ -298,7 +298,7 @@ const getGranularityForRange = (start: string, end: string): 'day' | 'hour' => {
 }
 const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start); const endDate = ref(defaultRange.end)
-const filters = ref<AdminUsageQueryParams>({ user_id: undefined, model: undefined, group_id: undefined, request_type: undefined, native_compaction_v2: null, billing_type: null, start_date: startDate.value, end_date: endDate.value })
+const filters = ref<AdminUsageQueryParams>({ user_id: undefined, request_id: undefined, model: undefined, group_id: undefined, request_type: undefined, native_compaction_v2: null, billing_type: null, start_date: startDate.value, end_date: endDate.value })
 const pagination = reactive({ page: 1, page_size: getPersistedPageSize(), total: 0 })
 const sortState = reactive({
   sort_by: 'created_at',
@@ -704,6 +704,7 @@ const errAllColumns = computed(() => [
   { key: 'status', label: t('admin.ops.errorLog.status') },
   { key: 'message', label: t('admin.ops.errorLog.message') },
   { key: 'created_at', label: t('admin.ops.errorLog.time') },
+  { key: 'request_id', label: t('admin.usage.requestId') },
   { key: 'user_agent', label: t('usage.userAgent') },
   { key: 'client_ip', label: t('admin.ops.errorLog.ip') },
   { key: 'actions', label: t('admin.ops.errorLog.action') },
@@ -828,6 +829,7 @@ const loadAdminErrors = async () => {
       api_key_id: filters.value.api_key_id ?? undefined,
       account_id: filters.value.account_id ?? undefined,
       group_id: filters.value.group_id ?? undefined,
+      request_id: filters.value.request_id || undefined,
       model: filters.value.model || undefined,
       phase: filters.value.error_phase || undefined,
       category: filters.value.error_category || undefined,

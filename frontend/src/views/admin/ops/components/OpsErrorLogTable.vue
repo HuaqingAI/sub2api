@@ -21,6 +21,15 @@
           >{{ formatDateTime(row.created_at) }}</span>
         </template>
 
+        <template #cell-request_id="{ row }">
+          <span
+            v-if="row.request_id"
+            class="block max-w-[220px] truncate font-mono text-xs text-gray-600 dark:text-gray-400"
+            :title="row.request_id"
+          >{{ row.request_id }}</span>
+          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+        </template>
+
         <template #cell-type="{ row }">
           <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium" :class="getTypeBadge(row).className">
             {{ getTypeBadge(row).label }}
@@ -209,16 +218,17 @@ const allColumns = computed<Column[]>(() => [
   { key: 'status', label: t('admin.ops.errorLog.status'), sortable: true },
   { key: 'message', label: t('admin.ops.errorLog.message') },
   { key: 'created_at', label: t('admin.ops.errorLog.time'), sortable: true },
+  { key: 'request_id', label: t('admin.usage.requestId') },
   { key: 'user_agent', label: t('usage.userAgent') },
   { key: 'client_ip', label: t('admin.ops.errorLog.ip') },
   { key: 'actions', label: t('admin.ops.errorLog.action') },
 ])
 
-// 传入 visibleColumnKeys 时按其过滤(列设置);未传则全量(Ops 弹窗等使用方)
+// 传入 visibleColumnKeys 时按其过滤(列设置);未传则使用 Ops 默认列
 const columns = computed<Column[]>(() => {
   const visibleColumns = props.visibleColumnKeys
     ? allColumns.value.filter((c) => props.visibleColumnKeys!.includes(c.key))
-    : allColumns.value
+    : allColumns.value.filter((c) => c.key !== 'request_id')
   if (!props.summaryFirst) return visibleColumns
 
   return [

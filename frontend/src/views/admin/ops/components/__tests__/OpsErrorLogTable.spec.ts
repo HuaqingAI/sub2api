@@ -16,7 +16,7 @@ vi.mock('vue-i18n', async (importOriginal) => {
 const TooltipStub = { template: '<div><slot /></div>' }
 const PaginationStub = { template: '<div class="pagination-stub" />' }
 
-function mountTable(row: Partial<OpsErrorLog>) {
+function mountTable(row: Partial<OpsErrorLog>, props: Record<string, unknown> = {}) {
   const base = {
     id: 1,
     created_at: '2026-06-05T23:59:50Z',
@@ -39,7 +39,7 @@ function mountTable(row: Partial<OpsErrorLog>) {
   } as OpsErrorLog
 
   return mount(OpsErrorLogTable, {
-    props: { rows: [base], total: 1, loading: false, page: 1, pageSize: 20 },
+    props: { rows: [base], total: 1, loading: false, page: 1, pageSize: 20, ...props },
     global: { stubs: { 'el-tooltip': TooltipStub, Pagination: PaginationStub } },
   })
 }
@@ -72,6 +72,16 @@ describe('OpsErrorLogTable user/api-key/account columns', () => {
 
     expect(wrapper.text()).toContain('old-key')
     expect(wrapper.text()).toContain('admin.ops.errorLog.keyDeletedBadge')
+  })
+
+  it('renders request id as its own column', () => {
+    const wrapper = mountTable(
+      { request_id: 'req-visible-1' },
+      { visibleColumnKeys: ['user', 'request_id', 'created_at'] },
+    )
+
+    expect(wrapper.findAll('thead th').map((header) => header.text())).toContain('admin.usage.requestId')
+    expect(wrapper.text()).toContain('req-visible-1')
   })
 })
 

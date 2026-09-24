@@ -665,6 +665,7 @@ describe('admin UsageView errors tab filter forwarding', () => {
     vm.filters.model = 'gpt-5.3-codex'
     vm.filters.account_id = 7
     vm.filters.group_id = 3
+    vm.filters.request_id = 'req-admin-error-1'
     await flushPromises()
 
     // 切换到「错误请求」标签（第二个 tab 按钮）触发 loadAdminErrors
@@ -677,6 +678,7 @@ describe('admin UsageView errors tab filter forwarding', () => {
       model: 'gpt-5.3-codex',
       account_id: 7,
       group_id: 3,
+      request_id: 'req-admin-error-1',
     }))
   })
 })

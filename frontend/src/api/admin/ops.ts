@@ -1097,6 +1097,7 @@ export type OpsErrorListQueryParams = {
   api_key_id?: number
   // 模型过滤：后端以 COALESCE(requested_model, model) 精确匹配（admin 路径）。
   model?: string
+  request_id?: string
 
   phase?: string
   // 分类(用户侧粗分类码,如 auth/rate_limit/upstream),后端反查为 phase/type ANY 条件
