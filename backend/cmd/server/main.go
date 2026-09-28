@@ -37,6 +37,34 @@ var (
 	BuildType = "source" // "source" for manual builds, "release" for CI builds (set by ldflags)
 )
 
+const (
+	shutdownTimeoutEnv     = "SHUTDOWN_TIMEOUT"
+	defaultShutdownTimeout = 5 * time.Second
+)
+
+func parseShutdownTimeout(raw string) (time.Duration, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultShutdownTimeout, true
+	}
+
+	timeout, err := time.ParseDuration(raw)
+	if err != nil || timeout <= 0 {
+		return defaultShutdownTimeout, false
+	}
+
+	return timeout, true
+}
+
+func shutdownTimeout() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(shutdownTimeoutEnv))
+	timeout, valid := parseShutdownTimeout(raw)
+	if raw != "" && !valid {
+		log.Printf("Invalid %s=%q; using default shutdown timeout %s", shutdownTimeoutEnv, raw, defaultShutdownTimeout)
+	}
+	return timeout
+}
+
 func init() {
 	// 如果 Version 已通过 ldflags 注入（例如 -X main.Version=...），则不要覆盖。
 	if strings.TrimSpace(Version) != "" {
@@ -184,7 +212,10 @@ func runMainServer() {
 
 	log.Println("Shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	timeout := shutdownTimeout()
+	log.Printf("Waiting up to %s for active requests to finish", timeout)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if err := app.Server.Shutdown(ctx); err != nil {
