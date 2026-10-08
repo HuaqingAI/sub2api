@@ -954,6 +954,38 @@ func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, upd
 // BulkUpdateAccounts updates multiple accounts in one request.
 // It merges credentials/extra keys instead of overwriting the whole object.
 func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error) {
+	if input.ModelMappingMode != "" && input.ModelMappingMode != "replace" && input.ModelMappingMode != "append" && input.ModelMappingMode != "replace_mappings" {
+		return nil, infraerrors.BadRequest("INVALID_MODEL_MAPPING_MODE", "model_mapping_mode must be append, replace, or replace_mappings")
+	}
+	if input.ModelMappingMode != "" {
+		reason := "INVALID_MODEL_MAPPING_APPEND"
+		if input.ModelMappingMode == "replace" {
+			reason = "INVALID_MODEL_MAPPING_REPLACE"
+		} else if input.ModelMappingMode == "replace_mappings" {
+			reason = "INVALID_MODEL_MAPPING_REPLACE_MAPPINGS"
+		}
+		mapping, ok := input.Credentials["model_mapping"].(map[string]any)
+		if !ok || (input.ModelMappingMode == "append" && len(mapping) == 0) {
+			return nil, infraerrors.BadRequest(reason, "model_mapping_mode requires a credentials.model_mapping object; append requires it to be non-empty")
+		}
+		seenSources := make(map[string]struct{}, len(mapping))
+		for source, target := range mapping {
+			value, ok := target.(string)
+			normalizedSource := strings.TrimSpace(source)
+			if normalizedSource == "" || !ok || strings.TrimSpace(value) == "" ||
+				strings.TrimSpace(value) != value || strings.Contains(value, "*") ||
+				(strings.Contains(source, "*") && (strings.Count(source, "*") != 1 || !strings.HasSuffix(source, "*"))) {
+				return nil, infraerrors.BadRequest(reason, "model_mapping entries must have valid source and target model names")
+			}
+			if _, exists := seenSources[normalizedSource]; exists || normalizedSource != source {
+				return nil, infraerrors.BadRequest(reason, "model_mapping source names must be unique after trimming spaces")
+			}
+			if input.ModelMappingMode == "replace_mappings" && source == value {
+				return nil, infraerrors.BadRequest(reason, "replace_mappings accepts only alias entries")
+			}
+			seenSources[normalizedSource] = struct{}{}
+		}
+	}
 	// Managed probe/session state may only enter through dedicated typed endpoints.
 	input.Extra = sanitizedCodexFingerprintExtraUpdates(input.Extra)
 	input.Extra = stripOpenAIAutoResetCreditManagedExtra(input.Extra, true)
@@ -1114,9 +1146,13 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	// Prepare bulk updates for columns and JSONB fields.
 	repoUpdates := AccountBulkUpdate{
 		Credentials:                input.Credentials,
+		ModelMappingMode:           input.ModelMappingMode,
 		Extra:                      input.Extra,
 		ProbeEnabled:               input.ProbeEnabled,
 		EnsureCodexFingerprintSeed: ShouldEnsureCodexFingerprintSeedForExtraUpdates(input.Extra),
+	}
+	if input.ModelMappingMode == "append" {
+		repoUpdates.MappingStats = make(map[int64]ModelMappingAppendStats, len(input.AccountIDs))
 	}
 	if input.ProbeEnabled != nil {
 		if repoUpdates.Extra == nil {
@@ -1187,6 +1223,12 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	// Handle group bindings per account (requires individual operations).
 	for _, accountID := range input.AccountIDs {
 		entry := BulkUpdateAccountResult{AccountID: accountID}
+		if stats, ok := repoUpdates.MappingStats[accountID]; ok {
+			entry.MappingAdded = stats.Added
+			entry.MappingUnchanged = stats.Unchanged
+			entry.MappingConflicts = stats.Conflicts
+			entry.Unchanged = stats.NoChanges
+		}
 
 		if input.GroupIDs != nil {
 			if err := s.accountRepo.BindGroups(ctx, accountID, *input.GroupIDs); err != nil {
@@ -1201,6 +1243,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 
 		entry.Success = true
 		result.Success++
+		if entry.Unchanged {
+			result.Unchanged++
+		}
 		result.SuccessIDs = append(result.SuccessIDs, accountID)
 		result.Results = append(result.Results, entry)
 	}

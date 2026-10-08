@@ -5,7 +5,44 @@
     width="wide"
     @close="handleClose"
   >
-    <form id="bulk-edit-account-form" class="space-y-5" @submit.prevent="() => handleSubmit()">
+    <div v-if="bulkMappingResult" data-testid="bulk-mapping-result" class="space-y-4">
+      <p class="text-sm text-gray-700 dark:text-gray-300">
+        {{ t('admin.accounts.bulkEdit.mappingResultSummary', {
+          applied: bulkMappingResult.success - (bulkMappingResult.unchanged || 0),
+          unchanged: bulkMappingResult.unchanged || 0,
+          failed: bulkMappingResult.failed
+        }) }}
+      </p>
+      <div class="max-h-96 space-y-2 overflow-y-auto">
+        <div
+          v-for="entry in bulkMappingResult.results"
+          :key="entry.account_id"
+          class="rounded border border-gray-200 p-3 text-sm dark:border-dark-600"
+        >
+          <div class="font-medium text-gray-800 dark:text-gray-200">
+            {{ t('admin.accounts.bulkEdit.mappingResultAccount', { id: entry.account_id }) }}
+          </div>
+          <p v-if="!entry.success" class="mt-1 text-red-600 dark:text-red-400">
+            {{ entry.error || t('admin.accounts.bulkEdit.failed') }}
+          </p>
+          <p v-else class="mt-1 text-gray-600 dark:text-gray-400">
+            {{ entry.unchanged
+              ? t('admin.accounts.bulkEdit.mappingResultUnchanged')
+              : t('admin.accounts.bulkEdit.mappingResultApplied') }}
+          </p>
+          <p v-if="entry.mapping_added !== undefined" class="mt-1 text-gray-600 dark:text-gray-400">
+            {{ t('admin.accounts.bulkEdit.mappingResultAdded', { count: entry.mapping_added }) }}
+          </p>
+          <p v-if="entry.mapping_unchanged !== undefined" class="mt-1 text-gray-600 dark:text-gray-400">
+            {{ t('admin.accounts.bulkEdit.mappingResultExisting', { count: entry.mapping_unchanged }) }}
+          </p>
+          <p v-if="entry.mapping_conflicts?.length" class="mt-1 text-amber-700 dark:text-amber-400">
+            {{ t('admin.accounts.bulkEdit.mappingResultConflicts', { models: entry.mapping_conflicts.join(', ') }) }}
+          </p>
+        </div>
+      </div>
+    </div>
+    <form v-else id="bulk-edit-account-form" class="space-y-5" @submit.prevent="() => handleSubmit()">
       <!-- Info -->
       <div class="rounded-lg bg-blue-50 p-4 dark:bg-blue-900/20">
         <p class="text-sm text-blue-700 dark:text-blue-400">
@@ -242,11 +279,12 @@
             {{ t('admin.accounts.modelRestriction') }}
           </label>
           <input
-            v-model="enableModelRestriction"
+            :checked="enableModelRestriction"
             id="bulk-edit-model-restriction-enabled"
             type="checkbox"
             aria-controls="bulk-edit-model-restriction-body"
             class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            @change="toggleModelRestriction"
           />
         </div>
 
@@ -301,7 +339,7 @@
                     ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-400 dark:hover:bg-dark-500'
                 ]"
-                @click="modelRestrictionMode = 'mapping'"
+                @click="selectMappingMode"
               >
                 <svg
                   class="mr-1.5 inline h-4 w-4"
@@ -345,7 +383,16 @@
                 v-model="allowedModels"
                 :model-mappings="modelMappings"
                 :platforms="targetSelectedPlatforms"
+                :account-id="baseAccountId"
+                @upstream-synced="handleUpstreamSynced"
               />
+
+              <p v-if="baseAccountId" class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.bulkEdit.syncBaseAccountHint', { id: baseAccountId }) }}
+              </p>
+              <p v-if="whitelistSyncedUpstream" class="mb-3 text-xs text-amber-700 dark:text-amber-400">
+                {{ t('admin.accounts.bulkEdit.appendEmptyAccountWarning') }}
+              </p>
 
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
@@ -375,6 +422,40 @@
                   {{ t('admin.accounts.mapRequestModels') }}
                 </p>
               </div>
+
+              <div class="mb-3 flex gap-2" role="group" :aria-label="t('admin.accounts.bulkEdit.mappingSaveMode')">
+                <button
+                  type="button"
+                  data-testid="bulk-mapping-append-mode"
+                  :aria-pressed="modelMappingSaveMode === 'append'"
+                  :class="[
+                    'flex-1 rounded-lg px-3 py-2 text-sm',
+                    modelMappingSaveMode === 'append'
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                      : 'bg-gray-100 text-gray-600 dark:bg-dark-600 dark:text-gray-400'
+                  ]"
+                  @click="modelMappingSaveMode = 'append'"
+                >
+                  {{ t('admin.accounts.bulkEdit.appendMappings') }}
+                </button>
+                <button
+                  type="button"
+                  data-testid="bulk-mapping-replace-mode"
+                  :aria-pressed="modelMappingSaveMode === 'replace'"
+                  :class="[
+                    'flex-1 rounded-lg px-3 py-2 text-sm',
+                    modelMappingSaveMode === 'replace'
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400'
+                      : 'bg-gray-100 text-gray-600 dark:bg-dark-600 dark:text-gray-400'
+                  ]"
+                  @click="modelMappingSaveMode = 'replace'"
+                >
+                  {{ t('admin.accounts.bulkEdit.replaceMappings') }}
+                </button>
+              </div>
+              <p v-if="modelMappingSaveMode === 'append'" class="mb-3 text-xs text-amber-700 dark:text-amber-400">
+                {{ t('admin.accounts.bulkEdit.appendEmptyAccountWarning') }}
+              </p>
 
               <!-- Model Mapping List -->
               <div v-if="modelMappings.length > 0" class="mb-3 space-y-2">
@@ -1424,42 +1505,69 @@
 
     <template #footer>
       <div class="flex justify-end gap-3">
-        <button type="button" class="btn btn-secondary" @click="handleClose">
-          {{ t('common.cancel') }}
+        <button v-if="bulkMappingResult" type="button" class="btn btn-primary" @click="handleClose">
+          {{ t('common.close') }}
         </button>
-        <button
-          type="submit"
-          form="bulk-edit-account-form"
-          :disabled="submitting"
-          class="btn btn-primary"
-        >
-          <svg
-            v-if="submitting"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin"
-            fill="none"
-            viewBox="0 0 24 24"
+        <template v-else>
+          <button type="button" class="btn btn-secondary" @click="handleClose">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            type="submit"
+            form="bulk-edit-account-form"
+            :disabled="submitting"
+            class="btn btn-primary"
           >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            />
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-          {{
-            submitting ? t('admin.accounts.bulkEdit.updating') : t('admin.accounts.bulkEdit.submit')
-          }}
-        </button>
+            <svg
+              v-if="submitting"
+              class="-ml-1 mr-2 h-4 w-4 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              />
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+            {{
+              submitting ? t('admin.accounts.bulkEdit.updating') : t('admin.accounts.bulkEdit.submit')
+            }}
+          </button>
+        </template>
       </div>
     </template>
   </BaseDialog>
+
+  <ConfirmDialog
+    :show="showDiscardSyncConfirm"
+    :title="t('admin.accounts.bulkEdit.discardSyncedModelsTitle')"
+    :message="t('admin.accounts.bulkEdit.discardSyncedModelsConfirm')"
+    :confirm-text="t('common.confirm')"
+    :cancel-text="t('common.cancel')"
+    :danger="true"
+    @confirm="handleDiscardSyncConfirm"
+    @cancel="handleDiscardSyncCancel"
+  />
+
+  <ConfirmDialog
+    :show="showReplaceMappingConfirm"
+    :title="t('admin.accounts.bulkEdit.replaceMappings')"
+    :message="t('admin.accounts.bulkEdit.replaceMappingsConfirm')"
+    :confirm-text="t('common.confirm')"
+    :cancel-text="t('common.cancel')"
+    :danger="true"
+    @confirm="handleReplaceMappingConfirm"
+    @cancel="handleReplaceMappingCancel"
+  />
 
   <ConfirmDialog
     :show="showMixedChannelWarning"
@@ -1496,7 +1604,8 @@ import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.
 import Icon from '@/components/icons/Icon.vue'
 import {
   buildModelMappingObject as buildModelMappingPayload,
-  getPresetMappingsByPlatform
+  getPresetMappingsByPlatform,
+  isValidWildcardPattern
 } from '@/composables/useModelWhitelist'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
 import {
@@ -1528,6 +1637,7 @@ interface Props {
     previewCount?: number
     selectedPlatforms?: AccountPlatform[]
     selectedTypes?: AccountType[]
+    baseAccountId?: number
   }
   proxies: ProxyConfig[]
   groups: AdminGroup[]
@@ -1547,6 +1657,11 @@ const targetMode = computed(() => props.target?.mode ?? 'selected')
 const targetPreviewCount = computed(() => props.target?.previewCount ?? props.accountIds.length)
 const targetSelectedPlatforms = computed(() => props.target?.selectedPlatforms ?? props.selectedPlatforms)
 const targetSelectedTypes = computed(() => props.target?.selectedTypes ?? props.selectedTypes)
+const baseAccountId = computed(() =>
+  targetMode.value === 'filtered'
+    ? props.target?.baseAccountId
+    : props.target?.baseAccountId ?? props.accountIds[0]
+)
 // Grok 快捷端点仅在所选账号全部为 grok 平台时展示（其他平台不显示）
 const allTargetsGrok = computed(
   () =>
@@ -1674,11 +1789,19 @@ const enableRpmLimit = ref(false)
 
 // State - field values
 const submitting = ref(false)
+const bulkMappingResult = ref<Awaited<ReturnType<typeof adminAPI.accounts.bulkUpdate>> | null>(null)
+const mappingResultNeedsRefresh = ref(false)
+const showDiscardSyncConfirm = ref(false)
+const pendingDiscardSyncAction = ref<'disable' | 'mapping' | null>(null)
+const showReplaceMappingConfirm = ref(false)
+const pendingReplaceMappingUpdates = ref<Record<string, unknown> | null>(null)
 const showMixedChannelWarning = ref(false)
 const mixedChannelWarningMessage = ref('')
 const pendingUpdatesForConfirm = ref<Record<string, unknown> | null>(null)
 const baseUrl = ref('')
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
+const modelMappingSaveMode = ref<'append' | 'replace'>('append')
+const whitelistSyncedUpstream = ref(false)
 const allowedModels = ref<string[]>([])
 const modelMappings = ref<ModelMapping[]>([])
 const selectedErrorCodes = ref<number[]>([])
@@ -1918,6 +2041,45 @@ const buildModelMappingObject = (): Record<string, string> | null => {
   )
 }
 
+const handleUpstreamSynced = () => {
+  enableModelRestriction.value = true
+  modelRestrictionMode.value = 'whitelist'
+  whitelistSyncedUpstream.value = true
+}
+
+const toggleModelRestriction = (event: Event) => {
+  const checkbox = event.target as HTMLInputElement
+  if (!checkbox.checked && enableModelRestriction.value && whitelistSyncedUpstream.value && allowedModels.value.length > 0) {
+    checkbox.checked = true
+    pendingDiscardSyncAction.value = 'disable'
+    showDiscardSyncConfirm.value = true
+    return
+  }
+  enableModelRestriction.value = checkbox.checked
+}
+
+const selectMappingMode = () => {
+  if (modelRestrictionMode.value === 'whitelist' && whitelistSyncedUpstream.value && allowedModels.value.length > 0) {
+    pendingDiscardSyncAction.value = 'mapping'
+    showDiscardSyncConfirm.value = true
+    return
+  }
+  modelRestrictionMode.value = 'mapping'
+}
+
+const handleDiscardSyncConfirm = () => {
+  if (pendingDiscardSyncAction.value === 'disable') enableModelRestriction.value = false
+  if (pendingDiscardSyncAction.value === 'mapping') modelRestrictionMode.value = 'mapping'
+  allowedModels.value = []
+  whitelistSyncedUpstream.value = false
+  handleDiscardSyncCancel()
+}
+
+const handleDiscardSyncCancel = () => {
+  showDiscardSyncConfirm.value = false
+  pendingDiscardSyncAction.value = null
+}
+
 const buildOpenAICompactModelMapping = (): Record<string, string> | null => {
   return buildModelMappingPayload('mapping', [], openAICompactModelMappings.value)
 }
@@ -2025,11 +2187,15 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
         mapping[m] = m
       }
       credentials.model_mapping = mapping
+      if (whitelistSyncedUpstream.value && Object.keys(mapping).length > 0) {
+        updates.model_mapping_mode = 'append'
+      }
       credentialsChanged = true
     } else {
-      // 映射模式下空配置同样表示“支持所有模型”。
+      // 映射模式下空配置只清除别名映射，账号自己的白名单由后端保留。
       const modelMapping = buildModelMappingObject()
       credentials.model_mapping = modelMapping ?? {}
+      updates.model_mapping_mode = modelMappingSaveMode.value === 'replace' ? 'replace_mappings' : 'append'
       credentialsChanged = true
     }
   }
@@ -2166,6 +2332,13 @@ const canPreCheck = () =>
   (targetSelectedPlatforms.value[0] === 'antigravity' || targetSelectedPlatforms.value[0] === 'anthropic')
 
 const handleClose = () => {
+  if (bulkMappingResult.value && mappingResultNeedsRefresh.value) {
+    mappingResultNeedsRefresh.value = false
+    emit('updated')
+  }
+  handleDiscardSyncCancel()
+  showReplaceMappingConfirm.value = false
+  pendingReplaceMappingUpdates.value = null
   showMixedChannelWarning.value = false
   mixedChannelWarningMessage.value = ''
   pendingUpdatesForConfirm.value = null
@@ -2259,9 +2432,32 @@ const handleSubmit = async () => {
     }
   }
 
+  if (enableModelRestriction.value && !isOpenAIModelRestrictionDisabled.value &&
+      modelRestrictionMode.value === 'mapping') {
+    const sources = new Set<string>()
+    if ((modelMappingSaveMode.value === 'append' && modelMappings.value.length === 0) ||
+        modelMappings.value.some(({ from, to }) => {
+      const source = from.trim()
+      const target = to.trim()
+      if (!source || !target || source === target || !isValidWildcardPattern(source) ||
+          target.includes('*') || sources.has(source)) return true
+      sources.add(source)
+      return false
+    })) {
+      appStore.showError(t('admin.accounts.bulkEdit.invalidAppendMapping'))
+      return
+    }
+  }
+
   const built = buildUpdatePayload()
   if (!built) {
     appStore.showError(t('admin.accounts.bulkEdit.noFieldsSelected'))
+    return
+  }
+
+  if (built.model_mapping_mode === 'replace_mappings') {
+    pendingReplaceMappingUpdates.value = built
+    showReplaceMappingConfirm.value = true
     return
   }
 
@@ -2269,6 +2465,19 @@ const handleSubmit = async () => {
   if (!canContinue) return
 
   await submitBulkUpdate(built)
+}
+
+const handleReplaceMappingConfirm = async () => {
+  showReplaceMappingConfirm.value = false
+  const updates = pendingReplaceMappingUpdates.value
+  pendingReplaceMappingUpdates.value = null
+  if (!updates || !await preCheckMixedChannelRisk(updates)) return
+  await submitBulkUpdate(updates)
+}
+
+const handleReplaceMappingCancel = () => {
+  showReplaceMappingConfirm.value = false
+  pendingReplaceMappingUpdates.value = null
 }
 
 const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
@@ -2289,6 +2498,13 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
     const success = res.success || 0
     const failed = res.failed || 0
     const inherited = res.long_context_inherited_count || 0
+
+    if (baseUpdates.model_mapping_mode) {
+      bulkMappingResult.value = res
+      mappingResultNeedsRefresh.value = true
+      pendingUpdatesForConfirm.value = null
+      return
+    }
 
     if (success > 0 && failed === 0) {
       if (inherited > 0) {
@@ -2325,6 +2541,11 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
       }))
     } else if (error.reason === 'OPENAI_LONG_CONTEXT_PARENT_REQUIRED') {
       appStore.showError(t('admin.accounts.bulkEdit.longContextParentRequired'))
+    } else if (error.reason === 'MODEL_MAPPING_REPLACE_WHITELIST_CONFLICT') {
+      appStore.showError(t('admin.accounts.bulkEdit.replaceMappingWhitelistConflict', {
+        id: error.metadata?.account_id ?? '?',
+        model: error.metadata?.key ?? '?'
+      }))
     } else {
       appStore.showError(error.message || t('admin.accounts.bulkEdit.failed'))
       console.error('Error bulk updating accounts:', error)
@@ -2389,6 +2610,14 @@ watch(
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
       openAIResponsesMode.value = 'auto'
       modelRestrictionMode.value = 'whitelist'
+      modelMappingSaveMode.value = 'append'
+      whitelistSyncedUpstream.value = false
+      bulkMappingResult.value = null
+      mappingResultNeedsRefresh.value = false
+      showDiscardSyncConfirm.value = false
+      pendingDiscardSyncAction.value = null
+      showReplaceMappingConfirm.value = false
+      pendingReplaceMappingUpdates.value = null
       allowedModels.value = []
       modelMappings.value = []
       selectedErrorCodes.value = []

@@ -3,11 +3,13 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import BulkEditAccountModal from '../BulkEditAccountModal.vue'
 import ModelWhitelistSelector from '../ModelWhitelistSelector.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import { adminAPI } from '@/api/admin'
 
-const { showError, showSuccess, translate } = vi.hoisted(() => ({
+const { showError, showSuccess, syncUpstreamModels, translate } = vi.hoisted(() => ({
   showError: vi.fn(),
   showSuccess: vi.fn(),
+  syncUpstreamModels: vi.fn(),
   translate: vi.fn((key: string) => key)
 }))
 
@@ -29,7 +31,8 @@ vi.mock('@/api/admin', () => ({
 }))
 
 vi.mock('@/api/admin/accounts', () => ({
-  getAntigravityDefaultModelMapping: vi.fn()
+  getAntigravityDefaultModelMapping: vi.fn(),
+  accountsAPI: { syncUpstreamModels }
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -84,6 +87,7 @@ describe('BulkEditAccountModal', () => {
   beforeEach(() => {
     vi.mocked(adminAPI.accounts.bulkUpdate).mockReset()
     vi.mocked(adminAPI.accounts.checkMixedChannelRisk).mockReset()
+    syncUpstreamModels.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
     translate.mockClear()
@@ -165,6 +169,214 @@ describe('BulkEditAccountModal', () => {
         model_mapping: {}
       }
     })
+  })
+
+  it('appends new mappings by default and keeps per-account results visible until closed', async () => {
+    vi.mocked(adminAPI.accounts.bulkUpdate).mockResolvedValueOnce({
+      success: 2,
+      failed: 0,
+      unchanged: 1,
+      results: [
+        { account_id: 1, success: true, mapping_added: 1, mapping_unchanged: 0 },
+        { account_id: 2, success: true, unchanged: true, mapping_added: 0, mapping_conflicts: ['gpt-5.6-sol-1m'] }
+      ]
+    } as any)
+    const wrapper = mountModal({ selectedPlatforms: ['openai'] })
+    await wrapper.get('#bulk-edit-model-restriction-enabled').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.modelMapping')!.trigger('click')
+    expect(wrapper.get('[data-testid="bulk-mapping-append-mode"]').attributes('aria-pressed')).toBe('true')
+
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.addMapping')!.trigger('click')
+    await wrapper.get('input[placeholder="admin.accounts.requestModel"]').setValue('gpt-5.6-sol-1m')
+    await wrapper.get('input[placeholder="admin.accounts.actualModel"]').setValue('gpt-5.6-sol')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenLastCalledWith([1, 2], {
+      credentials: { model_mapping: { 'gpt-5.6-sol-1m': 'gpt-5.6-sol' } },
+      model_mapping_mode: 'append'
+    })
+    expect(wrapper.get('[data-testid="bulk-mapping-result"]').text()).toContain('admin.accounts.bulkEdit.mappingResultSummary')
+    expect(wrapper.get('[data-testid="bulk-mapping-result"]').text()).toContain('admin.accounts.bulkEdit.mappingResultConflicts')
+    expect(wrapper.emitted('updated')).toBeUndefined()
+    await wrapper.findAll('button').find(button => button.text() === 'common.close')!.trigger('click')
+    expect(wrapper.emitted('updated')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('confirms replacing aliases, including an empty alias list, without requesting whitelist replacement', async () => {
+    const wrapper = mountModal({ selectedPlatforms: ['openai'] })
+    await wrapper.get('#bulk-edit-model-restriction-enabled').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.modelMapping')!.trigger('click')
+    await wrapper.get('[data-testid="bulk-mapping-replace-mode"]').trigger('click')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).not.toHaveBeenCalled()
+    const confirm = wrapper.findAllComponents(ConfirmDialog)[1]
+    expect(confirm.props('show')).toBe(true)
+    expect(confirm.props('message')).toBe('admin.accounts.bulkEdit.replaceMappingsConfirm')
+    confirm.vm.$emit('confirm')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenLastCalledWith([1, 2], {
+      credentials: { model_mapping: {} },
+      model_mapping_mode: 'replace_mappings'
+    })
+  })
+
+  it('submits only alias rows for replace and rejects identity rows in the mapping tab', async () => {
+    const wrapper = mountModal({ selectedPlatforms: ['openai'] })
+    await wrapper.get('#bulk-edit-model-restriction-enabled').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.modelMapping')!.trigger('click')
+    await wrapper.get('[data-testid="bulk-mapping-replace-mode"]').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.addMapping')!.trigger('click')
+    const source = wrapper.get('input[placeholder="admin.accounts.requestModel"]')
+    const target = wrapper.get('input[placeholder="admin.accounts.actualModel"]')
+    await source.setValue('gpt-5-1m')
+    await target.setValue('gpt-5')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    const confirm = wrapper.findAllComponents(ConfirmDialog)[1]
+    expect(confirm.props('show')).toBe(true)
+    confirm.vm.$emit('confirm')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      credentials: { model_mapping: { 'gpt-5-1m': 'gpt-5' } },
+      model_mapping_mode: 'replace_mappings'
+    })
+
+    const another = mountModal({ selectedPlatforms: ['openai'] })
+    await another.get('#bulk-edit-model-restriction-enabled').setValue(true)
+    await another.findAll('button').find(button => button.text() === 'admin.accounts.modelMapping')!.trigger('click')
+    await another.get('[data-testid="bulk-mapping-replace-mode"]').trigger('click')
+    await another.findAll('button').find(button => button.text() === 'admin.accounts.addMapping')!.trigger('click')
+    await another.get('input[placeholder="admin.accounts.requestModel"]').setValue('gpt-5')
+    await another.get('input[placeholder="admin.accounts.actualModel"]').setValue('gpt-5')
+    vi.mocked(adminAPI.accounts.bulkUpdate).mockClear()
+    await another.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(showError).toHaveBeenCalledWith('admin.accounts.bulkEdit.invalidAppendMapping')
+    expect(adminAPI.accounts.bulkUpdate).not.toHaveBeenCalled()
+  })
+
+  it('identifies the account and model when a replacement conflicts with its whitelist', async () => {
+    vi.mocked(adminAPI.accounts.bulkUpdate).mockRejectedValueOnce({
+      reason: 'MODEL_MAPPING_REPLACE_WHITELIST_CONFLICT',
+      metadata: { account_id: '2', key: 'gpt-5-1m' }
+    })
+    const wrapper = mountModal({ selectedPlatforms: ['openai'] })
+    await wrapper.get('#bulk-edit-model-restriction-enabled').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.modelMapping')!.trigger('click')
+    await wrapper.get('[data-testid="bulk-mapping-replace-mode"]').trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.addMapping')!.trigger('click')
+    await wrapper.get('input[placeholder="admin.accounts.requestModel"]').setValue('gpt-5-1m')
+    await wrapper.get('input[placeholder="admin.accounts.actualModel"]').setValue('gpt-5')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    wrapper.findAllComponents(ConfirmDialog)[1].vm.$emit('confirm')
+    await flushPromises()
+    expect(translate).toHaveBeenCalledWith('admin.accounts.bulkEdit.replaceMappingWhitelistConflict', {
+      id: '2', model: 'gpt-5-1m'
+    })
+    expect(showError).toHaveBeenCalledWith('admin.accounts.bulkEdit.replaceMappingWhitelistConflict')
+    expect(wrapper.find('[data-testid="bulk-mapping-result"]').exists()).toBe(false)
+  })
+
+  it('rejects an incomplete mapping in append mode instead of sending a clear', async () => {
+    const wrapper = mountModal({ selectedPlatforms: ['openai'] })
+    await wrapper.get('#bulk-edit-model-restriction-enabled').setValue(true)
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.modelMapping')!.trigger('click')
+    await wrapper.findAll('button').find(button => button.text() === 'admin.accounts.addMapping')!.trigger('click')
+    await wrapper.get('input[placeholder="admin.accounts.requestModel"]').setValue('gpt-5.6-sol-1m')
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(showError).toHaveBeenCalledWith('admin.accounts.bulkEdit.invalidAppendMapping')
+    expect(adminAPI.accounts.bulkUpdate).not.toHaveBeenCalled()
+  })
+
+  it('syncs only the base account and appends its models on bulk save', async () => {
+    syncUpstreamModels.mockResolvedValue({ models: ['gpt-6-astra', 'gpt-6-astra'] })
+    const wrapper = mountModal({
+      accountIds: [11, 12],
+      selectedPlatforms: ['openai'],
+      target: { mode: 'selected', baseAccountId: 11, selectedPlatforms: ['openai'], selectedTypes: ['oauth'] }
+    })
+    const selector = wrapper.getComponent(ModelWhitelistSelector)
+    expect(selector.props('accountId')).toBe(11)
+    const syncButton = selector.findAll('button').find(button => button.text() === 'admin.accounts.syncUpstreamModels')
+    expect(syncButton).toBeDefined()
+    await syncButton!.trigger('click')
+    await flushPromises()
+
+    expect(syncUpstreamModels).toHaveBeenCalledTimes(1)
+    expect(syncUpstreamModels).toHaveBeenCalledWith(11)
+    expect(wrapper.get('#bulk-edit-model-restriction-enabled').element).toHaveProperty('checked', true)
+    expect(selector.props('modelValue')).toEqual(['gpt-6-astra'])
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    await flushPromises()
+    expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([11, 12], {
+      credentials: { model_mapping: { 'gpt-6-astra': 'gpt-6-astra' } },
+      model_mapping_mode: 'append'
+    })
+  })
+
+  it('asks before discarding unsaved synced models on tab switch or restriction disable', async () => {
+    syncUpstreamModels.mockResolvedValue({ models: ['gpt-6-astra'] })
+    const wrapper = mountModal({ selectedPlatforms: ['openai'], target: {
+      mode: 'selected', baseAccountId: 1, selectedPlatforms: ['openai'], selectedTypes: ['oauth']
+    } })
+    const syncButton = wrapper.getComponent(ModelWhitelistSelector).findAll('button')
+      .find(button => button.text() === 'admin.accounts.syncUpstreamModels')!
+    await syncButton.trigger('click')
+    await flushPromises()
+
+    const mappingTab = wrapper.findAll('button').find(button => button.text() === 'admin.accounts.modelMapping')!
+    await mappingTab.trigger('click')
+    const discardConfirm = wrapper.findAllComponents(ConfirmDialog)[0]
+    expect(discardConfirm.props('show')).toBe(true)
+    expect(wrapper.getComponent(ModelWhitelistSelector).props('modelValue')).toEqual(['gpt-6-astra'])
+    discardConfirm.vm.$emit('cancel')
+    await flushPromises()
+
+    await wrapper.get('#bulk-edit-model-restriction-enabled').setValue(false)
+    expect(discardConfirm.props('show')).toBe(true)
+    expect((wrapper.get('#bulk-edit-model-restriction-enabled').element as HTMLInputElement).checked).toBe(true)
+    discardConfirm.vm.$emit('confirm')
+    await flushPromises()
+    expect((wrapper.get('#bulk-edit-model-restriction-enabled').element as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('uses the filtered preview base account without selected IDs', async () => {
+    syncUpstreamModels.mockResolvedValue({ models: ['gpt-6-astra'] })
+    const wrapper = mountModal({
+      accountIds: [],
+      selectedPlatforms: [],
+      target: {
+        mode: 'filtered',
+        filters: { platform: 'openai' },
+        previewCount: 2,
+        selectedPlatforms: ['openai'],
+        selectedTypes: ['oauth'],
+        baseAccountId: 42
+      }
+    })
+    const selector = wrapper.getComponent(ModelWhitelistSelector)
+    expect(selector.props('accountId')).toBe(42)
+    await selector.findAll('button').find(button => button.text() === 'admin.accounts.syncUpstreamModels')!.trigger('click')
+    await flushPromises()
+    expect(syncUpstreamModels).toHaveBeenCalledTimes(1)
+    expect(syncUpstreamModels).toHaveBeenCalledWith(42)
+  })
+
+  it('leaves the bulk draft unchanged when the base account sync fails', async () => {
+    syncUpstreamModels.mockRejectedValue(new Error('upstream unavailable'))
+    const wrapper = mountModal({ selectedPlatforms: ['openai'] })
+    const selector = wrapper.getComponent(ModelWhitelistSelector)
+    await selector.findAll('button').find(button => button.text() === 'admin.accounts.syncUpstreamModels')!.trigger('click')
+    await flushPromises()
+
+    expect(syncUpstreamModels).toHaveBeenCalledWith(1)
+    expect(wrapper.get('#bulk-edit-model-restriction-enabled').element).toHaveProperty('checked', false)
+    expect(selector.props('modelValue')).toEqual([])
+    await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
+    expect(adminAPI.accounts.bulkUpdate).not.toHaveBeenCalled()
   })
 
   it('全部目标为 Grok OAuth 时，官方主机 base_url 作为手动端点切换正常提交', async () => {

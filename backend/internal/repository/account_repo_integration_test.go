@@ -5,12 +5,14 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
@@ -1723,6 +1725,160 @@ func (s *AccountRepoSuite) TestBulkUpdate_MergeCredentials() {
 	got, _ := s.repo.GetByID(s.ctx, a1.ID)
 	s.Require().Equal("value", got.Credentials["existing"])
 	s.Require().Equal("new_value", got.Credentials["new_key"])
+}
+
+func (s *AccountRepoSuite) TestBulkUpdate_AppendModelMappingPerAccount() {
+	a1 := mustCreateAccount(s.T(), s.client, &service.Account{
+		Name: "zcl-test", Platform: service.PlatformOpenAI,
+		Credentials: map[string]any{"api_key": "first", "model_mapping": map[string]any{
+			"gpt-5-1m": "gpt-5", "gpt-6-astra-1m": "gpt-6-astra",
+		}},
+	})
+	a2 := mustCreateAccount(s.T(), s.client, &service.Account{
+		Name: "zcl-test2", Platform: service.PlatformOpenAI,
+		Credentials: map[string]any{"api_key": "second", "model_mapping": map[string]any{
+			"gpt-6-astra-1m": "gpt-6-astra",
+		}},
+	})
+	update := service.AccountBulkUpdate{
+		ModelMappingMode: "append",
+		MappingStats:     make(map[int64]service.ModelMappingAppendStats),
+		Credentials: map[string]any{"model_mapping": map[string]any{
+			"gpt-5.6-sol-1m": "gpt-5.6-sol",
+		}},
+	}
+	rows, err := s.repo.BulkUpdate(s.ctx, []int64{a1.ID, a2.ID}, update)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(2), rows)
+	s.Require().Equal(1, update.MappingStats[a1.ID].Added)
+	s.Require().Equal(1, update.MappingStats[a2.ID].Added)
+	got1, err := s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	got2, err := s.repo.GetByID(s.ctx, a2.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(map[string]any{
+		"gpt-5-1m": "gpt-5", "gpt-6-astra-1m": "gpt-6-astra", "gpt-5.6-sol-1m": "gpt-5.6-sol",
+	}, got1.Credentials["model_mapping"])
+	s.Require().Equal(map[string]any{
+		"gpt-6-astra-1m": "gpt-6-astra", "gpt-5.6-sol-1m": "gpt-5.6-sol",
+	}, got2.Credentials["model_mapping"])
+	s.Require().Equal("first", got1.Credentials["api_key"])
+	s.Require().Equal("second", got2.Credentials["api_key"])
+
+	updated1, updated2 := got1.UpdatedAt, got2.UpdatedAt
+	rows, err = s.repo.BulkUpdate(s.ctx, []int64{a1.ID, a2.ID}, update)
+	s.Require().NoError(err)
+	s.Require().Zero(rows)
+	s.Require().True(update.MappingStats[a1.ID].NoChanges)
+	s.Require().True(update.MappingStats[a2.ID].NoChanges)
+	got1, err = s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	got2, err = s.repo.GetByID(s.ctx, a2.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(updated1, got1.UpdatedAt)
+	s.Require().Equal(updated2, got2.UpdatedAt)
+	conflictStats := make(map[int64]service.ModelMappingAppendStats)
+	rows, err = s.repo.BulkUpdate(s.ctx, []int64{a1.ID, a2.ID}, service.AccountBulkUpdate{
+		ModelMappingMode: "append",
+		MappingStats:     conflictStats,
+		Credentials:      map[string]any{"model_mapping": map[string]any{"gpt-5-1m": "different"}},
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(int64(1), rows) // a1 keeps its old target; a2 gains this source key.
+	s.Require().Equal([]string{"gpt-5-1m"}, conflictStats[a1.ID].Conflicts)
+	s.Require().True(conflictStats[a1.ID].NoChanges)
+	s.Require().Equal(1, conflictStats[a2.ID].Added)
+	got1, err = s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	s.Require().Equal("gpt-5", got1.Credentials["model_mapping"].(map[string]any)["gpt-5-1m"])
+
+	_, err = s.repo.BulkUpdate(s.ctx, []int64{a1.ID}, service.AccountBulkUpdate{
+		Credentials: map[string]any{"model_mapping": map[string]any{}},
+	})
+	s.Require().NoError(err)
+	got1, err = s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	s.Require().Empty(got1.Credentials["model_mapping"])
+}
+
+func (s *AccountRepoSuite) TestBulkUpdate_ReplaceMappingsKeepsEachWhitelist() {
+	a1 := mustCreateAccount(s.T(), s.client, &service.Account{
+		Name: "replace-alias-1", Platform: service.PlatformOpenAI,
+		Credentials: map[string]any{"api_key": "first", "model_mapping": map[string]any{
+			"gpt-5": "gpt-5", "old-alias-1": "old-target-1",
+		}},
+	})
+	a2 := mustCreateAccount(s.T(), s.client, &service.Account{
+		Name: "replace-alias-2", Platform: service.PlatformOpenAI,
+		Credentials: map[string]any{"api_key": "second", "model_mapping": map[string]any{
+			"gpt-6": "gpt-6", "old-alias-2": "old-target-2",
+		}},
+	})
+	ids := []int64{a1.ID, a2.ID}
+	_, err := s.repo.BulkUpdate(s.ctx, ids, service.AccountBulkUpdate{
+		ModelMappingMode: "replace_mappings",
+		Credentials:      map[string]any{"model_mapping": map[string]any{"gpt-6": "gpt-5"}},
+	})
+	s.Require().Error(err)
+	var appErr *infraerrors.ApplicationError
+	s.Require().ErrorAs(err, &appErr)
+	s.Require().Equal("MODEL_MAPPING_REPLACE_WHITELIST_CONFLICT", appErr.Reason)
+	s.Require().Equal(strconv.FormatInt(a2.ID, 10), appErr.Metadata["account_id"])
+	s.Require().Equal("gpt-6", appErr.Metadata["key"])
+	got1, err := s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(a1.Credentials["model_mapping"], got1.Credentials["model_mapping"])
+	got2, err := s.repo.GetByID(s.ctx, a2.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(a2.Credentials["model_mapping"], got2.Credentials["model_mapping"])
+
+	rows, err := s.repo.BulkUpdate(s.ctx, ids, service.AccountBulkUpdate{
+		ModelMappingMode: "replace_mappings",
+		Credentials: map[string]any{
+			"base_url":      "https://example.com",
+			"model_mapping": map[string]any{"new-alias": "new-target"},
+		},
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(int64(2), rows)
+	got1, err = s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	got2, err = s.repo.GetByID(s.ctx, a2.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(map[string]any{"gpt-5": "gpt-5", "new-alias": "new-target"}, got1.Credentials["model_mapping"])
+	s.Require().Equal(map[string]any{"gpt-6": "gpt-6", "new-alias": "new-target"}, got2.Credentials["model_mapping"])
+	s.Require().Equal("first", got1.Credentials["api_key"])
+	s.Require().Equal("second", got2.Credentials["api_key"])
+	s.Require().Equal("https://example.com", got1.Credentials["base_url"])
+	s.Require().Equal("https://example.com", got2.Credentials["base_url"])
+
+	_, err = s.repo.BulkUpdate(s.ctx, ids, service.AccountBulkUpdate{
+		ModelMappingMode: "replace_mappings",
+		Credentials:      map[string]any{"model_mapping": map[string]any{}},
+	})
+	s.Require().NoError(err)
+	got1, err = s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	got2, err = s.repo.GetByID(s.ctx, a2.ID)
+	s.Require().NoError(err)
+	s.Require().Equal(map[string]any{"gpt-5": "gpt-5"}, got1.Credentials["model_mapping"])
+	s.Require().Equal(map[string]any{"gpt-6": "gpt-6"}, got2.Credentials["model_mapping"])
+
+	_, err = s.repo.BulkUpdate(s.ctx, []int64{a1.ID}, service.AccountBulkUpdate{
+		Credentials: map[string]any{"model_mapping": map[string]any{}},
+	})
+	s.Require().NoError(err)
+	got1, err = s.repo.GetByID(s.ctx, a1.ID)
+	s.Require().NoError(err)
+	s.Require().Empty(got1.Credentials["model_mapping"])
+	_, err = s.repo.BulkUpdate(s.ctx, []int64{a2.ID}, service.AccountBulkUpdate{
+		ModelMappingMode: "replace",
+		Credentials:      map[string]any{"model_mapping": map[string]any{}},
+	})
+	s.Require().NoError(err)
+	got2, err = s.repo.GetByID(s.ctx, a2.ID)
+	s.Require().NoError(err)
+	s.Require().Empty(got2.Credentials["model_mapping"])
 }
 
 func (s *AccountRepoSuite) TestBulkUpdate_MergeExtra() {

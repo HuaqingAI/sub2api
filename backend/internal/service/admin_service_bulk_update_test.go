@@ -20,6 +20,7 @@ type accountRepoStubForBulkUpdate struct {
 	bulkUpdateIDs       []int64
 	bulkUpdateCalls     int
 	lastBulkUpdate      AccountBulkUpdate
+	appendStats         map[int64]ModelMappingAppendStats
 	bindGroupErrByID    map[int64]error
 	bindGroupsCalls     []int64
 	bindGroupsByAccount map[int64][]int64
@@ -56,6 +57,11 @@ func (s *accountRepoStubForBulkUpdate) BulkUpdate(_ context.Context, ids []int64
 	s.bulkUpdateCalls++
 	s.bulkUpdateIDs = append([]int64{}, ids...)
 	s.lastBulkUpdate = updates
+	for id, stats := range s.appendStats {
+		if updates.MappingStats != nil {
+			updates.MappingStats[id] = stats
+		}
+	}
 	if s.bulkUpdateErr != nil {
 		return 0, s.bulkUpdateErr
 	}
@@ -166,6 +172,80 @@ func TestAdminService_BulkUpdateAccounts_AllSuccessIDs(t *testing.T) {
 	require.Len(t, result.Results, 3)
 }
 
+func TestAdminServiceBulkUpdateAccountsModelMappingMode(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		mode    string
+		mapping any
+		reason  string
+	}{
+		{name: "invalid mode", mode: "merge", mapping: map[string]any{"a": "b"}, reason: "INVALID_MODEL_MAPPING_MODE"},
+		{name: "missing mapping", mode: "append", reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "empty mapping", mode: "append", mapping: map[string]any{}, reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "non-string target", mode: "append", mapping: map[string]any{"a": 1}, reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "blank source", mode: "append", mapping: map[string]any{" ": "b"}, reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "blank target", mode: "append", mapping: map[string]any{"a": " "}, reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "source wildcard in middle", mode: "append", mapping: map[string]any{"a*b": "c"}, reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "target wildcard", mode: "append", mapping: map[string]any{"a": "c*"}, reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "trimmed source collision", mode: "append", mapping: map[string]any{"a": "b", " a ": "c"}, reason: "INVALID_MODEL_MAPPING_APPEND"},
+		{name: "replace null", mode: "replace", reason: "INVALID_MODEL_MAPPING_REPLACE"},
+		{name: "replace non-string", mode: "replace", mapping: map[string]any{"a": 1}, reason: "INVALID_MODEL_MAPPING_REPLACE"},
+		{name: "replace mappings identity", mode: "replace_mappings", mapping: map[string]any{"a": "a"}, reason: "INVALID_MODEL_MAPPING_REPLACE_MAPPINGS"},
+		{name: "replace mappings invalid target", mode: "replace_mappings", mapping: map[string]any{"a": "*"}, reason: "INVALID_MODEL_MAPPING_REPLACE_MAPPINGS"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &accountRepoStubForBulkUpdate{}
+			_, err := (&adminServiceImpl{accountRepo: repo}).BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+				AccountIDs:       []int64{1},
+				Credentials:      map[string]any{"model_mapping": tc.mapping},
+				ModelMappingMode: tc.mode,
+			})
+			requireApplicationErrorReason(t, err, tc.reason)
+			require.Zero(t, repo.bulkUpdateCalls)
+		})
+	}
+
+	repo := &accountRepoStubForBulkUpdate{appendStats: map[int64]ModelMappingAppendStats{
+		1: {Added: 1},
+		2: {Unchanged: 1, Conflicts: []string{"gpt-5-1m"}, NoChanges: true},
+	}}
+	result, err := (&adminServiceImpl{accountRepo: repo}).BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs:       []int64{1, 2},
+		Credentials:      map[string]any{"model_mapping": map[string]any{"gpt-5.6-sol-1m": "gpt-5.6-sol"}},
+		ModelMappingMode: "append",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "append", repo.lastBulkUpdate.ModelMappingMode)
+	require.Equal(t, 1, result.Unchanged)
+	require.Equal(t, 1, result.Results[0].MappingAdded)
+	require.Equal(t, 1, result.Results[1].MappingUnchanged)
+	require.Equal(t, []string{"gpt-5-1m"}, result.Results[1].MappingConflicts)
+	require.True(t, result.Results[1].Unchanged)
+
+	_, err = (&adminServiceImpl{accountRepo: repo}).BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs:  []int64{1},
+		Credentials: map[string]any{"model_mapping": map[string]any{}},
+	})
+	require.NoError(t, err)
+	require.Empty(t, repo.lastBulkUpdate.ModelMappingMode)
+
+	_, err = (&adminServiceImpl{accountRepo: repo}).BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs:       []int64{1},
+		Credentials:      map[string]any{"model_mapping": map[string]any{}},
+		ModelMappingMode: "replace",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "replace", repo.lastBulkUpdate.ModelMappingMode)
+
+	_, err = (&adminServiceImpl{accountRepo: repo}).BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs:       []int64{1},
+		Credentials:      map[string]any{"model_mapping": map[string]any{}},
+		ModelMappingMode: "replace_mappings",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "replace_mappings", repo.lastBulkUpdate.ModelMappingMode)
+}
+
 func TestAdminService_BulkUpdateAccounts_RejectsRateChangeForSyncedAccounts(t *testing.T) {
 	repo := &accountRepoStubForBulkUpdate{
 		getByIDsAccounts: []*Account{
@@ -226,6 +306,30 @@ func TestAdminService_BulkUpdateAccounts_PartialFailureIDs(t *testing.T) {
 	require.ElementsMatch(t, []int64{1, 3}, result.SuccessIDs)
 	require.ElementsMatch(t, []int64{2}, result.FailedIDs)
 	require.Len(t, result.Results, 3)
+}
+
+func TestAdminServiceBulkUpdateKeepsMappingStatsWhenGroupBindingFails(t *testing.T) {
+	repo := &accountRepoStubForBulkUpdate{
+		appendStats:      map[int64]ModelMappingAppendStats{2: {Added: 1, Conflicts: []string{"old-key"}}},
+		bindGroupErrByID: map[int64]error{2: errors.New("bind failed")},
+	}
+	svc := &adminServiceImpl{
+		accountRepo: repo,
+		groupRepo:   &groupRepoStubForAdmin{getByID: &Group{ID: 10, Name: "g10"}},
+	}
+	groupIDs := []int64{10}
+	result, err := svc.BulkUpdateAccounts(context.Background(), &BulkUpdateAccountsInput{
+		AccountIDs:            []int64{2},
+		GroupIDs:              &groupIDs,
+		Credentials:           map[string]any{"model_mapping": map[string]any{"new-key": "new-target"}},
+		ModelMappingMode:      "append",
+		SkipMixedChannelCheck: true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Failed)
+	require.False(t, result.Results[0].Success)
+	require.Equal(t, 1, result.Results[0].MappingAdded)
+	require.Equal(t, []string{"old-key"}, result.Results[0].MappingConflicts)
 }
 
 func TestAdminService_BulkUpdateAccounts_NilGroupRepoReturnsError(t *testing.T) {

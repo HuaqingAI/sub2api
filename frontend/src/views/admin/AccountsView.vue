@@ -559,6 +559,7 @@ type AccountBulkEditTarget =
       accountIds: number[]
       selectedPlatforms: AccountPlatform[]
       selectedTypes: AccountType[]
+      baseAccountId?: number
     }
   | {
       mode: 'filtered'
@@ -575,6 +576,7 @@ type AccountBulkEditTarget =
       previewCount: number
       selectedPlatforms: AccountPlatform[]
       selectedTypes: AccountType[]
+      baseAccountId?: number
     }
 const selPlatforms = computed<AccountPlatform[]>(() => {
   const platforms = new Set(
@@ -2100,6 +2102,7 @@ const openBulkEditSelected = () => {
   bulkEditTarget.value = {
     mode: 'selected',
     accountIds: [...selIds.value],
+    baseAccountId: selIds.value[0],
     selectedPlatforms: [...selPlatforms.value],
     selectedTypes: [...selTypes.value]
   }
@@ -2114,6 +2117,7 @@ const openBulkEditFiltered = async () => {
     mode: 'filtered',
     filters,
     previewCount: preview.total,
+    baseAccountId: preview.items[0]?.id,
     selectedPlatforms,
     selectedTypes
   }

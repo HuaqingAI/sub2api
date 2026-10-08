@@ -105,9 +105,10 @@ const ProbeDataTableStub = {
 
 const AccountBulkActionsBarStub = {
   props: ['selectedIds'],
-  emits: ['edit-filtered', 'probe-upstream-billing'],
+  emits: ['edit-selected', 'edit-filtered', 'probe-upstream-billing'],
   template: `
     <div>
+      <button data-test="edit-selected" @click="$emit('edit-selected')">edit selected</button>
       <button data-test="edit-filtered" @click="$emit('edit-filtered')">edit filtered</button>
       <button data-test="probe-upstream-billing" @click="$emit('probe-upstream-billing')">probe</button>
     </div>
@@ -121,7 +122,7 @@ const PaginationStub = {
 
 const BulkEditAccountModalStub = {
   props: ['show', 'target'],
-  template: '<div data-test="bulk-edit-modal" :data-show="String(show)" :data-target-mode="target?.mode ?? \'\'"></div>'
+  template: '<div data-test="bulk-edit-modal" :data-show="String(show)" :data-target-mode="target?.mode ?? \'\'" :data-base-account-id="target?.baseAccountId"></div>'
 }
 
 describe('admin AccountsView bulk edit scope', () => {
@@ -166,6 +167,13 @@ describe('admin AccountsView bulk edit scope', () => {
   })
 
   it('opens bulk edit in filtered-results mode from the bulk actions dropdown', async () => {
+    listAccounts.mockResolvedValue({
+      items: [{ id: 42, name: 'first-account', platform: 'openai', type: 'oauth' }],
+      total: 2,
+      page: 1,
+      page_size: 20,
+      pages: 1
+    })
     const wrapper = mount(AccountsView, {
       global: {
         stubs: {
@@ -209,6 +217,61 @@ describe('admin AccountsView bulk edit scope', () => {
 
     expect(wrapper.get('[data-test="bulk-edit-modal"]').attributes('data-show')).toBe('true')
     expect(wrapper.get('[data-test="bulk-edit-modal"]').attributes('data-target-mode')).toBe('filtered')
+    expect(wrapper.get('[data-test="bulk-edit-modal"]').attributes('data-base-account-id')).toBe('42')
+  })
+
+  it('uses the first selected account as the base for upstream sync', async () => {
+    listAccounts.mockResolvedValue({
+      items: [
+        { id: 7, name: 'first-account', platform: 'openai', type: 'oauth' },
+        { id: 11, name: 'second-account', platform: 'openai', type: 'oauth' }
+      ],
+      total: 2,
+      page: 1,
+      page_size: 20,
+      pages: 1
+    })
+    const wrapper = mount(AccountsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: { template: '<div><slot name="table" /></div>' },
+          DataTable: DataTableStub,
+          Pagination: true,
+          ConfirmDialog: true,
+          AccountTableActions: true,
+          AccountTableFilters: true,
+          AccountBulkActionsBar: AccountBulkActionsBarStub,
+          AccountActionMenu: true,
+          ImportDataModal: true,
+          ReAuthAccountModal: true,
+          AccountTestModal: true,
+          AccountStatsModal: true,
+          ScheduledTestsPanel: true,
+          SyncFromCrsModal: true,
+          TempUnschedStatusModal: true,
+          ErrorPassthroughRulesModal: true,
+          TLSFingerprintProfilesModal: true,
+          CreateAccountModal: true,
+          EditAccountModal: true,
+          BulkEditAccountModal: BulkEditAccountModalStub,
+          PlatformTypeBadge: true,
+          AccountCapacityCell: true,
+          AccountStatusIndicator: true,
+          AccountTodayStatsCell: true,
+          AccountGroupsCell: true,
+          AccountUsageCell: true,
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+    await wrapper.findAll('[data-test="select-row"] input')[1].trigger('change')
+    await wrapper.findAll('[data-test="select-row"] input')[0].trigger('change')
+    await wrapper.get('[data-test="edit-selected"]').trigger('click')
+
+    expect(wrapper.get('[data-test="bulk-edit-modal"]').attributes('data-base-account-id')).toBe('11')
   })
 
   it('renders the created_at column by default', async () => {

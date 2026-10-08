@@ -536,10 +536,19 @@ export async function bulkUpdate(
 ): Promise<{
   success: number
   failed: number
+  unchanged?: number
   success_ids?: number[]
   failed_ids?: number[]
   long_context_inherited_count?: number
-  results: Array<{ account_id: number; success: boolean; error?: string }>
+  results: Array<{
+    account_id: number
+    success: boolean
+    error?: string
+    unchanged?: boolean
+    mapping_added?: number
+    mapping_unchanged?: number
+    mapping_conflicts?: string[]
+  }>
   }> {
   const payload = Array.isArray(accountIdsOrPayload)
     ? {
@@ -550,10 +559,19 @@ export async function bulkUpdate(
   const { data } = await apiClient.post<{
     success: number
     failed: number
+    unchanged?: number
     success_ids?: number[]
     failed_ids?: number[]
     long_context_inherited_count?: number
-    results: Array<{ account_id: number; success: boolean; error?: string }>
+    results: Array<{
+      account_id: number
+      success: boolean
+      error?: string
+      unchanged?: boolean
+      mapping_added?: number
+      mapping_unchanged?: number
+      mapping_conflicts?: string[]
+    }>
   }>('/admin/accounts/bulk-update', payload)
   return data
 }

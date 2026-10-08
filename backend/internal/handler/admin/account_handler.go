@@ -175,6 +175,7 @@ type BulkUpdateAccountsRequest struct {
 	Schedulable             *bool                     `json:"schedulable"`
 	GroupIDs                *[]int64                  `json:"group_ids"`
 	Credentials             map[string]any            `json:"credentials"`
+	ModelMappingMode        string                    `json:"model_mapping_mode"`
 	Extra                   map[string]any            `json:"extra"`
 	ProbeEnabled            *bool                     `json:"upstream_billing_probe_enabled"`
 	ConfirmMixedChannelRisk *bool                     `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
@@ -2356,6 +2357,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		Schedulable:           req.Schedulable,
 		GroupIDs:              req.GroupIDs,
 		Credentials:           req.Credentials,
+		ModelMappingMode:      req.ModelMappingMode,
 		Extra:                 req.Extra,
 		ProbeEnabled:          req.ProbeEnabled,
 		SkipMixedChannelCheck: skipCheck,

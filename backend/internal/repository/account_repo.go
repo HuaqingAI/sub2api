@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	dbpredicate "github.com/Wei-Shaw/sub2api/ent/predicate"
 	dbproxy "github.com/Wei-Shaw/sub2api/ent/proxy"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -3075,15 +3077,62 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 	}
 	// JSONB 需要合并而非覆盖，使用 raw SQL 保持旧行为。
 	credentialPlaceholder := ""
-	if len(updates.Credentials) > 0 {
-		payload, err := json.Marshal(updates.Credentials)
+	credentialExpression := ""
+	credentials := updates.Credentials
+	appendMapping := updates.ModelMappingMode == "append"
+	replaceMappings := updates.ModelMappingMode == "replace_mappings"
+	var incomingMapping map[string]any
+	if appendMapping || replaceMappings {
+		mapping, ok := updates.Credentials["model_mapping"].(map[string]any)
+		if !ok || (appendMapping && len(mapping) == 0) {
+			return 0, infraerrors.BadRequest("INVALID_MODEL_MAPPING_MODE", "model_mapping_mode requires a model_mapping object; append requires it to be non-empty")
+		}
+		if replaceMappings {
+			for source, target := range mapping {
+				if source == target {
+					return 0, infraerrors.BadRequest("INVALID_MODEL_MAPPING_REPLACE_MAPPINGS", "replace_mappings accepts only alias entries")
+				}
+			}
+		}
+		incomingMapping = mapping
+		credentials = make(map[string]any, len(updates.Credentials)-1)
+		for key, value := range updates.Credentials {
+			if key != "model_mapping" {
+				credentials[key] = value
+			}
+		}
+	}
+	if len(credentials) > 0 {
+		payload, err := json.Marshal(credentials)
 		if err != nil {
 			return 0, err
 		}
 		credentialPlaceholder = "$" + itoa(idx)
-		setClauses = append(setClauses, "credentials = COALESCE(credentials, '{}'::jsonb) || "+credentialPlaceholder+"::jsonb")
+		credentialExpression = "COALESCE(credentials, '{}'::jsonb) || " + credentialPlaceholder + "::jsonb"
 		args = append(args, payload)
 		idx++
+	}
+	if appendMapping || replaceMappings {
+		mappingPayload, err := json.Marshal(updates.Credentials["model_mapping"])
+		if err != nil {
+			return 0, err
+		}
+		if credentialExpression == "" {
+			credentialExpression = "COALESCE(credentials, '{}'::jsonb)"
+		}
+		mappingPlaceholder := "$" + itoa(idx)
+		mappingExpression := mappingPlaceholder + "::jsonb || COALESCE(credentials -> 'model_mapping', '{}'::jsonb)"
+		if replaceMappings {
+			mappingExpression = "COALESCE((SELECT jsonb_object_agg(entry.key, entry.value) " +
+				"FROM jsonb_each(COALESCE(credentials -> 'model_mapping', '{}'::jsonb)) AS entry(key, value) " +
+				"WHERE entry.value = to_jsonb(entry.key)), '{}'::jsonb) || " + mappingPlaceholder + "::jsonb"
+		}
+		credentialExpression = "jsonb_set(" + credentialExpression + ", '{model_mapping}', " + mappingExpression + ", true)"
+		args = append(args, mappingPayload)
+		idx++
+	}
+	if credentialExpression != "" {
+		setClauses = append(setClauses, "credentials = "+credentialExpression)
 	}
 
 	ollamaGroupIdentityChanges := make([]string, 0, 2)
@@ -3223,6 +3272,10 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 	whereClause := " WHERE id = ANY($" + itoa(idx) + ") AND deleted_at IS NULL"
 	args = append(args, pq.Array(ids))
 	idx++
+	appendOnly := appendMapping && len(credentials) == 0 && len(setClauses) == 2 // credentials plus updated_at
+	if appendOnly {
+		whereClause += " AND credentials IS DISTINCT FROM " + credentialExpression
+	}
 	if updates.ProbeEnabled != nil {
 		whereClause += " AND type = $" + itoa(idx)
 		args = append(args, service.AccountTypeAPIKey)
@@ -3245,6 +3298,14 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 			defer func() { _ = tx.Rollback() }()
 			ctx = dbent.NewTxContext(ctx, tx)
 			exec = tx.Client()
+		}
+	}
+	var mappingStats map[int64]service.ModelMappingAppendStats
+	if appendMapping || replaceMappings {
+		var err error
+		mappingStats, err = validateBulkModelMappingTargets(ctx, exec, ids, incomingMapping, updates.ModelMappingMode)
+		if err != nil {
+			return 0, err
 		}
 	}
 
@@ -3271,7 +3332,21 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		}
 	}
 	if rows > 0 {
-		payload := map[string]any{"account_ids": ids}
+		changedIDs := ids
+		if appendOnly {
+			changedIDs = make([]int64, 0, len(mappingStats))
+			seenChanged := make(map[int64]struct{}, len(mappingStats))
+			for _, id := range ids {
+				if mappingStats[id].Added > 0 {
+					if _, seen := seenChanged[id]; seen {
+						continue
+					}
+					seenChanged[id] = struct{}{}
+					changedIDs = append(changedIDs, id)
+				}
+			}
+		}
+		payload := map[string]any{"account_ids": changedIDs}
 		if err := enqueueSchedulerOutbox(ctx, exec, service.SchedulerOutboxEventAccountBulkChanged, nil, nil, payload); err != nil {
 			return 0, err
 		}
@@ -3279,6 +3354,12 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 	if tx != nil {
 		if err := tx.Commit(); err != nil {
 			return 0, err
+		}
+	}
+	for id, stats := range mappingStats {
+		stats.NoChanges = appendOnly && stats.Added == 0
+		if updates.MappingStats != nil {
+			updates.MappingStats[id] = stats
 		}
 	}
 	if rows > 0 && contextTx == nil {
@@ -3294,6 +3375,94 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		}
 	}
 	return rows, nil
+}
+
+func validateBulkModelMappingTargets(ctx context.Context, exec sqlExecutor, ids []int64, incoming map[string]any, mode string) (map[int64]service.ModelMappingAppendStats, error) {
+	uniqueIDs := make([]int64, 0, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			uniqueIDs = append(uniqueIDs, id)
+		}
+	}
+	sort.Slice(uniqueIDs, func(i, j int) bool { return uniqueIDs[i] < uniqueIDs[j] })
+	rows, err := exec.QueryContext(ctx, `
+		SELECT id, platform, type, credentials ->> 'oauth_type', credentials -> 'model_mapping'
+		FROM accounts WHERE id = ANY($1) AND deleted_at IS NULL ORDER BY id FOR UPDATE
+	`, pq.Array(uniqueIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	statsByID := make(map[int64]service.ModelMappingAppendStats, len(uniqueIDs))
+	count := 0
+	for rows.Next() {
+		var id int64
+		var platform, accountType string
+		var oauthType sql.NullString
+		var rawMapping []byte
+		if err := rows.Scan(&id, &platform, &accountType, &oauthType, &rawMapping); err != nil {
+			return nil, err
+		}
+		count++
+		var mapping map[string]any
+		if len(rawMapping) > 0 {
+			if err := json.Unmarshal(rawMapping, &mapping); err != nil || mapping == nil {
+				return nil, infraerrors.BadRequest("INVALID_STORED_MODEL_MAPPING", "account model_mapping must be a JSON object").WithMetadata(map[string]string{"account_id": strconv.FormatInt(id, 10)})
+			}
+		}
+		if mode == "append" && len(mapping) == 0 && (platform == service.PlatformAntigravity || platform == service.PlatformGrok ||
+			(platform == service.PlatformGemini && accountType == service.AccountTypeOAuth && strings.TrimSpace(oauthType.String) == "google_one")) {
+			return nil, infraerrors.BadRequest("MODEL_MAPPING_APPEND_DEFAULT_CONFLICT", "account uses a default model mapping; use replace after reviewing its models").WithMetadata(map[string]string{"account_id": strconv.FormatInt(id, 10)})
+		}
+		if mode == "replace_mappings" {
+			for source, rawTarget := range mapping {
+				target, ok := rawTarget.(string)
+				if !ok {
+					continue
+				}
+				normalizedSource := strings.TrimSpace(source)
+				if normalizedSource != "" && normalizedSource == strings.TrimSpace(target) && (source != normalizedSource || target != normalizedSource) {
+					return nil, infraerrors.BadRequest("NONCANONICAL_MODEL_MAPPING_WHITELIST", "account has a noncanonical whitelist entry; edit it before replacing aliases").WithMetadata(map[string]string{
+						"account_id": strconv.FormatInt(id, 10), "key": source,
+					})
+				}
+			}
+		}
+		stats := service.ModelMappingAppendStats{}
+		for source, target := range incoming {
+			oldTarget, exists := mapping[source]
+			oldValue, oldValueIsString := oldTarget.(string)
+			if mode == "replace_mappings" {
+				if oldValueIsString && oldValue == source {
+					return nil, infraerrors.BadRequest("MODEL_MAPPING_REPLACE_WHITELIST_CONFLICT", "new alias conflicts with an existing model whitelist entry").WithMetadata(map[string]string{
+						"account_id": strconv.FormatInt(id, 10), "key": source,
+					})
+				}
+				continue
+			}
+			newValue, newValueIsString := target.(string)
+			switch {
+			case !exists:
+				stats.Added++
+			case oldValueIsString && newValueIsString && oldValue == newValue:
+				stats.Unchanged++
+			default:
+				stats.Conflicts = append(stats.Conflicts, source)
+			}
+		}
+		sort.Strings(stats.Conflicts)
+		statsByID[id] = stats
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if count != len(uniqueIDs) {
+		return nil, service.ErrAccountNotFound
+	}
+	return statsByID, nil
 }
 
 type accountGroupQueryOptions struct {

@@ -263,3 +263,21 @@ func TestBulkUpdateAcceptsDedicatedUpstreamBillingProbeSetting(t *testing.T) {
 	require.NotNil(t, adminSvc.lastBulkUpdateAccountInput.ProbeEnabled)
 	require.False(t, *adminSvc.lastBulkUpdateAccountInput.ProbeEnabled)
 }
+
+func TestBulkUpdatePassesModelMappingMode(t *testing.T) {
+	adminSvc := newStubAdminService()
+	router := setupAccountMixedChannelRouter(adminSvc)
+	body, _ := json.Marshal(map[string]any{
+		"account_ids":        []int64{1, 2},
+		"credentials":        map[string]any{"model_mapping": map[string]any{"gpt-5.6-sol-1m": "gpt-5.6-sol"}},
+		"model_mapping_mode": "append",
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/accounts/bulk-update", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, adminSvc.lastBulkUpdateAccountInput)
+	require.Equal(t, "append", adminSvc.lastBulkUpdateAccountInput.ModelMappingMode)
+}
