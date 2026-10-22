@@ -179,3 +179,24 @@ type OpsErrorLogList struct {
 	Page     int            `json:"page"`
 	PageSize int            `json:"page_size"`
 }
+
+// OpsAccountErrorCategoryCount is one user-facing error category within an
+// account's error-request total.
+type OpsAccountErrorCategoryCount struct {
+	Category string `json:"category"`
+	Count    int64  `json:"count"`
+}
+
+// OpsAccountErrorBreakdownItem groups client-visible error requests by account.
+// AccountName is empty when the referenced account was removed or cannot be
+// joined; callers can use AccountID as a stable fallback label.
+type OpsAccountErrorBreakdownItem struct {
+	AccountID   int64                           `json:"account_id"`
+	AccountName string                          `json:"account_name"`
+	Total       int64                           `json:"total"`
+	Categories  []*OpsAccountErrorCategoryCount `json:"categories"`
+}
+
+type OpsAccountErrorBreakdownResponse struct {
+	Accounts []*OpsAccountErrorBreakdownItem `json:"accounts"`
+}

@@ -699,6 +699,18 @@ func (s *OpsService) GetErrorLogs(ctx context.Context, filter *OpsErrorLogFilter
 	return result, nil
 }
 
+// GetAccountErrorBreakdown returns client-visible error-request totals grouped
+// by account and the same user-facing category shown in the error list.
+func (s *OpsService) GetAccountErrorBreakdown(ctx context.Context, filter *OpsErrorLogFilter) (*OpsAccountErrorBreakdownResponse, error) {
+	if err := s.RequireMonitoringEnabled(ctx); err != nil {
+		return nil, err
+	}
+	if s.opsRepo == nil {
+		return &OpsAccountErrorBreakdownResponse{Accounts: []*OpsAccountErrorBreakdownItem{}}, nil
+	}
+	return s.opsRepo.GetAccountErrorBreakdown(ctx, filter)
+}
+
 // ListUserErrorRequests 返回某个用户自己的错误请求（精简脱敏）。
 // 强制：仅当前用户、View=all（含业务限流/余额类）、排除 count_tokens 噪声。
 func (s *OpsService) ListUserErrorRequests(ctx context.Context, userID int64, filter *OpsErrorLogFilter) (*UserErrorRequestList, error) {

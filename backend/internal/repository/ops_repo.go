@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -392,6 +393,91 @@ LIMIT $` + itoa(len(args)+1) + ` OFFSET $` + itoa(len(args)+2)
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// GetAccountErrorBreakdown aggregates the same client-visible error rows as the
+// error list, but groups them by account and user-facing category. The raw
+// phase/type values are mapped in Go so the chart stays aligned with
+// service.MapUserErrorCategory.
+func (r *opsRepository) GetAccountErrorBreakdown(ctx context.Context, filter *service.OpsErrorLogFilter) (*service.OpsAccountErrorBreakdownResponse, error) {
+	if r == nil || r.db == nil {
+		return nil, fmt.Errorf("nil ops repository")
+	}
+	if filter == nil {
+		filter = &service.OpsErrorLogFilter{}
+	}
+
+	where, args := buildOpsErrorLogsWhere(filter)
+	query := `
+SELECT
+  e.account_id,
+  COALESCE(a.name, ''),
+  e.error_phase,
+  e.error_type,
+  COUNT(*) AS total
+FROM ops_error_logs e
+LEFT JOIN accounts a ON a.id = e.account_id
+` + where + `
+  AND e.account_id IS NOT NULL
+GROUP BY e.account_id, a.name, e.error_phase, e.error_type
+ORDER BY e.account_id ASC, total DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	accountsByID := make(map[int64]*service.OpsAccountErrorBreakdownItem)
+	categoryCounts := make(map[int64]map[string]*service.OpsAccountErrorCategoryCount)
+	for rows.Next() {
+		var accountID int64
+		var accountName, phase, errorType string
+		var count int64
+		if err := rows.Scan(&accountID, &accountName, &phase, &errorType, &count); err != nil {
+			return nil, err
+		}
+
+		item := accountsByID[accountID]
+		if item == nil {
+			item = &service.OpsAccountErrorBreakdownItem{
+				AccountID:   accountID,
+				AccountName: accountName,
+				Categories:  make([]*service.OpsAccountErrorCategoryCount, 0),
+			}
+			accountsByID[accountID] = item
+			categoryCounts[accountID] = make(map[string]*service.OpsAccountErrorCategoryCount)
+		}
+
+		category := service.MapUserErrorCategory(strings.ToLower(phase), strings.ToLower(errorType))
+		categoryItem := categoryCounts[accountID][category]
+		if categoryItem == nil {
+			categoryItem = &service.OpsAccountErrorCategoryCount{Category: category}
+			categoryCounts[accountID][category] = categoryItem
+			item.Categories = append(item.Categories, categoryItem)
+		}
+		categoryItem.Count += count
+		item.Total += count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	accounts := make([]*service.OpsAccountErrorBreakdownItem, 0, len(accountsByID))
+	for _, item := range accountsByID {
+		sort.Slice(item.Categories, func(i, j int) bool {
+			return item.Categories[i].Category < item.Categories[j].Category
+		})
+		accounts = append(accounts, item)
+	}
+	sort.Slice(accounts, func(i, j int) bool {
+		if accounts[i].Total == accounts[j].Total {
+			return accounts[i].AccountID < accounts[j].AccountID
+		}
+		return accounts[i].Total > accounts[j].Total
+	})
+
+	return &service.OpsAccountErrorBreakdownResponse{Accounts: accounts}, nil
 }
 
 func (r *opsRepository) GetErrorLogByID(ctx context.Context, id int64) (*service.OpsErrorLogDetail, error) {

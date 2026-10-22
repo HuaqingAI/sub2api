@@ -242,6 +242,7 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/errors", h.Admin.Ops.GetErrorLogs)
 		ops.GET("/errors/:id", h.Admin.Ops.GetErrorLogByID)
 		ops.PUT("/errors/:id/resolve", h.Admin.Ops.UpdateErrorResolution)
+		ops.GET("/account-error-distribution", h.Admin.Ops.GetAccountErrorBreakdown)
 
 		// Request errors (client-visible failures)
 		ops.GET("/request-errors", h.Admin.Ops.ListRequestErrors)

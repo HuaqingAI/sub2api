@@ -63,6 +63,10 @@
           />
           <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
         </div>
+        <AccountErrorDistributionChart
+          :items="accountErrorDistribution"
+          :loading="accountErrorLoading"
+        />
       </div>
       <!-- 明细区：tab 栏 + 筛选 + 内容收进同一张卡片，消除割裂感 -->
       <div class="card">
@@ -200,10 +204,11 @@ import UsageCleanupDialog from '@/components/admin/usage/UsageCleanupDialog.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import OpsErrorLogTable from '@/views/admin/ops/components/OpsErrorLogTable.vue'
 import OpsErrorDetailModal from '@/views/admin/ops/components/OpsErrorDetailModal.vue'
-import { listErrorLogs } from '@/api/admin/ops'
-import type { OpsErrorLog } from '@/api/admin/ops'
+import { getAccountErrorDistribution, listErrorLogs } from '@/api/admin/ops'
+import type { AccountErrorDistributionItem, OpsErrorLog } from '@/api/admin/ops'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'; import GroupDistributionChart from '@/components/charts/GroupDistributionChart.vue'; import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import EndpointDistributionChart from '@/components/charts/EndpointDistributionChart.vue'
+import AccountErrorDistributionChart from '@/components/charts/AccountErrorDistributionChart.vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { AdminUsageLog, TrendDataPoint, ModelStat, GroupStat, EndpointStat, AdminUser } from '@/types'; import type { AdminUsageStatsResponse, AdminUsageQueryParams } from '@/api/admin/usage'
 
@@ -229,10 +234,13 @@ const inboundEndpointStats = ref<EndpointStat[]>([])
 const upstreamEndpointStats = ref<EndpointStat[]>([])
 const endpointPathStats = ref<EndpointStat[]>([])
 const endpointStatsLoading = ref(false)
+const accountErrorDistribution = ref<AccountErrorDistributionItem[]>([])
+const accountErrorLoading = ref(false)
 let abortController: AbortController | null = null; let exportAbortController: AbortController | null = null
 let chartReqSeq = 0
 let statsReqSeq = 0
 let modelStatsReqSeq = 0
+let accountErrorReqSeq = 0
 const exportProgress = reactive({ show: false, progress: 0, current: 0, total: 0, estimatedTime: '' })
 const cleanupDialogVisible = ref(false)
 // Balance history modal state
@@ -524,6 +532,7 @@ const applyFilters = () => {
   loadStats()
   loadModelStats(modelDistributionSource.value, true)
   loadChartData()
+  loadAccountErrorDistribution()
   errPage.value = 1
   if (activeTab.value === 'errors') {
     loadAdminErrors()
@@ -537,6 +546,7 @@ const refreshData = () => {
   loadStats(true)
   loadModelStats(modelDistributionSource.value, true)
   loadChartData()
+  loadAccountErrorDistribution()
   if (activeTab.value === 'errors') loadAdminErrors()
   if (rankingMounted.value) rankingRef.value?.reload()
 }
@@ -816,6 +826,35 @@ const selectedErrorId = ref<number | null>(null)
 const toRFC3339 = (d: string | undefined, endOfDay = false): string | undefined =>
   d ? new Date(d + (endOfDay ? 'T23:59:59.999' : 'T00:00:00')).toISOString() : undefined
 
+const loadAccountErrorDistribution = async () => {
+  const seq = ++accountErrorReqSeq
+  accountErrorLoading.value = true
+  try {
+    const response = await getAccountErrorDistribution({
+      view: 'all',
+      start_time: toRFC3339(filters.value.start_date),
+      end_time: toRFC3339(filters.value.end_date, true),
+      user_id: filters.value.user_id ?? undefined,
+      api_key_id: filters.value.api_key_id ?? undefined,
+      account_id: filters.value.account_id ?? undefined,
+      group_id: filters.value.group_id ?? undefined,
+      request_id: filters.value.request_id || undefined,
+      model: filters.value.model || undefined,
+      phase: filters.value.error_phase || undefined,
+      category: filters.value.error_category || undefined,
+      status_codes: filters.value.status_code != null ? String(filters.value.status_code) : undefined,
+    })
+    if (seq !== accountErrorReqSeq) return
+    accountErrorDistribution.value = response.accounts ?? []
+  } catch (error) {
+    if (seq !== accountErrorReqSeq) return
+    console.error('Failed to load account error distribution:', error)
+    accountErrorDistribution.value = []
+  } finally {
+    if (seq === accountErrorReqSeq) accountErrorLoading.value = false
+  }
+}
+
 const loadAdminErrors = async () => {
   errLoading.value = true
   try {
@@ -875,6 +914,7 @@ onMounted(() => {
   window.setTimeout(() => {
     void loadChartData()
   }, 120)
+  void loadAccountErrorDistribution()
   loadSavedColumns()
   loadSavedErrColumns()
   document.addEventListener('click', handleColumnClickOutside)

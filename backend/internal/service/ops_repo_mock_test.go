@@ -10,6 +10,7 @@ type opsRepoMock struct {
 	InsertErrorLogFn              func(ctx context.Context, input *OpsInsertErrorLogInput) (int64, error)
 	BatchInsertErrorLogsFn        func(ctx context.Context, inputs []*OpsInsertErrorLogInput) (int64, error)
 	GetErrorLogByIDFn             func(ctx context.Context, id int64) (*OpsErrorLogDetail, error)
+	GetAccountErrorBreakdownFn    func(ctx context.Context, filter *OpsErrorLogFilter) (*OpsAccountErrorBreakdownResponse, error)
 	BatchInsertSystemLogsFn       func(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error)
 	ListSystemLogsFn              func(ctx context.Context, filter *OpsSystemLogFilter) (*OpsSystemLogList, error)
 	DeleteSystemLogsFn            func(ctx context.Context, filter *OpsSystemLogCleanupFilter) (int64, error)
@@ -32,6 +33,13 @@ func (m *opsRepoMock) BatchInsertErrorLogs(ctx context.Context, inputs []*OpsIns
 
 func (m *opsRepoMock) ListErrorLogs(ctx context.Context, filter *OpsErrorLogFilter) (*OpsErrorLogList, error) {
 	return &OpsErrorLogList{Errors: []*OpsErrorLog{}, Page: 1, PageSize: 20}, nil
+}
+
+func (m *opsRepoMock) GetAccountErrorBreakdown(ctx context.Context, filter *OpsErrorLogFilter) (*OpsAccountErrorBreakdownResponse, error) {
+	if m.GetAccountErrorBreakdownFn != nil {
+		return m.GetAccountErrorBreakdownFn(ctx, filter)
+	}
+	return &OpsAccountErrorBreakdownResponse{Accounts: []*OpsAccountErrorBreakdownItem{}}, nil
 }
 
 func (m *opsRepoMock) GetErrorLogByID(ctx context.Context, id int64) (*OpsErrorLogDetail, error) {

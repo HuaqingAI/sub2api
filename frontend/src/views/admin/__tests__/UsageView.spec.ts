@@ -4,7 +4,7 @@ import { defineComponent, ref } from 'vue'
 
 import UsageView from '../UsageView.vue'
 
-const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listErrorLogs, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
+const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listErrorLogs, getAccountErrorDistribution, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
   vi.stubGlobal('localStorage', {
     getItem: vi.fn(() => null),
     setItem: vi.fn(),
@@ -19,6 +19,7 @@ const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listE
     getById: vi.fn(),
     getModelStats: vi.fn(),
     listErrorLogs: vi.fn(),
+    getAccountErrorDistribution: vi.fn(() => Promise.resolve({ accounts: [] })),
     routeQuery: {} as Record<string, string>,
 		aoaToSheet: vi.fn(() => ({})),
 		sheetAddAoa: vi.fn(),
@@ -85,6 +86,7 @@ vi.mock('xlsx', () => ({
 
 vi.mock('@/api/admin/ops', () => ({
   listErrorLogs,
+  getAccountErrorDistribution,
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -163,6 +165,10 @@ const GroupDistributionChartStub = {
     </div>
   `,
 }
+const AccountErrorDistributionChartStub = {
+  props: ['items', 'loading'],
+  template: '<div data-test="account-error-chart" />',
+}
 
 const mountRouteFilteredUsageView = () => mount(UsageView, {
   global: { stubs: {
@@ -171,7 +177,7 @@ const mountRouteFilteredUsageView = () => mount(UsageView, {
     UserBalanceHistoryModal: true, Pagination: true, Select: true,
     DateRangePicker: true, Icon: true, TokenUsageTrend: true,
     ModelDistributionChart: true, GroupDistributionChart: true,
-    EndpointDistributionChart: true, UserTokenRanking: true,
+    EndpointDistributionChart: true, AccountErrorDistributionChart: true, UserTokenRanking: true,
   } },
 })
 
@@ -384,7 +390,7 @@ describe('admin UsageView distribution metric toggles', () => {
         UserBalanceHistoryModal: true, AuditLogModal: true, Pagination: true, Select: true,
         DateRangePicker: true, Icon: true, TokenUsageTrend: true,
         ModelDistributionChart: ModelDistributionChartStub, GroupDistributionChart: GroupDistributionChartStub,
-        EndpointDistributionChart: true, UserTokenRanking: true,
+        EndpointDistributionChart: true, AccountErrorDistributionChart: true, UserTokenRanking: true,
       } },
     })
     vi.advanceTimersByTime(120)
@@ -422,6 +428,7 @@ describe('admin UsageView distribution metric toggles', () => {
           TokenUsageTrend: true,
           ModelDistributionChart: ModelDistributionChartStub,
           GroupDistributionChart: GroupDistributionChartStub,
+          AccountErrorDistributionChart: true,
           UserTokenRanking: true,
         },
       },
@@ -499,6 +506,7 @@ describe('admin UsageView request ID column visibility', () => {
           ModelDistributionChart: true,
           GroupDistributionChart: true,
           EndpointDistributionChart: true,
+          AccountErrorDistributionChart: true,
           UserTokenRanking: true,
         },
       },
@@ -544,6 +552,7 @@ describe('admin UsageView request ID column visibility', () => {
           ModelDistributionChart: true,
           GroupDistributionChart: true,
           EndpointDistributionChart: true,
+          AccountErrorDistributionChart: true,
           UserTokenRanking: true,
         },
       },
@@ -608,6 +617,7 @@ describe('admin UsageView handleUserClick', () => {
           ModelDistributionChart: true,
           GroupDistributionChart: true,
           EndpointDistributionChart: true,
+          AccountErrorDistributionChart: true,
           UserTokenRanking: true,
         },
       },
@@ -653,7 +663,7 @@ describe('admin UsageView errors tab filter forwarding', () => {
         UsageTable: true, UsageExportProgress: true, UsageCleanupDialog: true,
         UserBalanceHistoryModal: true, AuditLogModal: true, Pagination: true, Select: true,
         DateRangePicker: true, Icon: true, TokenUsageTrend: true,
-        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
+        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true, AccountErrorDistributionChart: true,
         UserTokenRanking: true, OpsErrorLogTable: true, OpsErrorDetailModal: true,
       } },
     })
@@ -679,6 +689,76 @@ describe('admin UsageView errors tab filter forwarding', () => {
       account_id: 7,
       group_id: 3,
       request_id: 'req-admin-error-1',
+    }))
+  })
+})
+
+describe('admin UsageView account error distribution', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    list.mockReset().mockResolvedValue({ items: [], total: 0, pages: 0 })
+    getStats.mockReset().mockResolvedValue({
+      total_requests: 0, total_input_tokens: 0, total_output_tokens: 0,
+      total_cache_tokens: 0, total_tokens: 0, total_cost: 0, total_actual_cost: 0, average_duration_ms: 0,
+    })
+    getSnapshotV2.mockReset().mockResolvedValue({ trend: [], models: [], groups: [] })
+    getModelStats.mockReset().mockResolvedValue({ models: [] })
+    getAccountErrorDistribution.mockReset().mockResolvedValue({
+      accounts: [{
+        account_id: 7,
+        account_name: 'primary',
+        total: 3,
+        categories: [{ category: 'upstream', count: 3 }],
+      }],
+    })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('loads account error counts with the active error filters', async () => {
+    const wrapper = mount(UsageView, {
+      global: { stubs: {
+        AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+        UsageTable: true, UsageExportProgress: true, UsageCleanupDialog: true,
+        UserBalanceHistoryModal: true, Pagination: true, Select: true,
+        DateRangePicker: true, Icon: true, TokenUsageTrend: true,
+        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
+        AccountErrorDistributionChart: AccountErrorDistributionChartStub,
+        UserTokenRanking: true, OpsErrorLogTable: true, OpsErrorDetailModal: true,
+      } },
+    })
+    vi.advanceTimersByTime(120)
+    await flushPromises()
+
+    expect(wrapper.findComponent(AccountErrorDistributionChartStub).props('items')).toEqual([
+      expect.objectContaining({ account_id: 7 }),
+    ])
+
+    getAccountErrorDistribution.mockClear()
+    const vm = wrapper.vm as any
+    vm.filters.model = 'gpt-5.3-codex'
+    vm.filters.account_id = 7
+    vm.filters.group_id = 3
+    vm.filters.request_id = 'req-account-errors'
+    vm.filters.error_phase = 'upstream'
+    vm.filters.error_category = 'upstream'
+    vm.filters.status_code = 503
+    vm.applyFilters()
+    await flushPromises()
+
+    expect(getAccountErrorDistribution).toHaveBeenCalledWith(expect.objectContaining({
+      view: 'all',
+      model: 'gpt-5.3-codex',
+      account_id: 7,
+      group_id: 3,
+      request_id: 'req-account-errors',
+      phase: 'upstream',
+      category: 'upstream',
+      status_codes: '503',
+      start_time: expect.any(String),
+      end_time: expect.any(String),
     }))
   })
 })
@@ -711,7 +791,7 @@ describe('admin UsageView ranking tab', () => {
         UsageTable: true, UsageExportProgress: true, UsageCleanupDialog: true,
         UserBalanceHistoryModal: true, Pagination: true, Select: true,
         DateRangePicker: true, Icon: true, TokenUsageTrend: true,
-        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true,
+        ModelDistributionChart: true, GroupDistributionChart: true, EndpointDistributionChart: true, AccountErrorDistributionChart: true,
         UserTokenRanking: UserTokenRankingStub, OpsErrorLogTable: true, OpsErrorDetailModal: true,
       } },
     })

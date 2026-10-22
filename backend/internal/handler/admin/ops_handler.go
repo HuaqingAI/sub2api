@@ -97,14 +97,54 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 		pageSize = 500
 	}
 
-	startTime, endTime, err := parseOpsTimeRange(c, "1h")
+	filter, err := parseOpsErrorLogFilter(c, page, pageSize)
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, result.Errors, int64(result.Total), result.Page, result.PageSize)
+}
 
+// GetAccountErrorBreakdown returns client-visible error-request counts by
+// account and user-facing category.
+// GET /api/v1/admin/ops/account-error-distribution
+func (h *OpsHandler) GetAccountErrorBreakdown(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	filter, err := parseOpsErrorLogFilter(c, 0, 0)
+	if err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	result, err := h.opsService.GetAccountErrorBreakdown(c.Request.Context(), filter)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
+}
+
+func parseOpsErrorLogFilter(c *gin.Context, page, pageSize int) (*service.OpsErrorLogFilter, error) {
+	startTime, endTime, err := parseOpsTimeRange(c, "1h")
+	if err != nil {
+		return nil, err
+	}
+
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
 	}
@@ -118,98 +158,72 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 	filter.Query = strings.TrimSpace(c.Query("q"))
 	filter.UserQuery = strings.TrimSpace(c.Query("user_query"))
 	filter.RequestID = strings.TrimSpace(c.Query("request_id"))
-	// Model 过滤：admin 走精确匹配（ModelFuzzy 默认 false，保持管理端语义）。
-	// buildOpsErrorLogsWhere 以 COALESCE(requested_model, model) 比对。
 	filter.Model = strings.TrimSpace(c.Query("model"))
 
-	// 请求错误语义:client-visible status>=400 守卫恒生效（未设
-	// IncludeRecoveredUpstream 时 phase=upstream 不再绕过守卫），故
-	// phase=upstream 作为普通过滤条件保留——此前这里清空该值，导致
-	// 错误类型下拉选「上游」等于不过滤。
-
-	// 分类(用户侧粗分类码)→ phase/type ANY 条件,与用户端 /usage/errors 同一映射;
-	// 未知分类返回空切片 = 不过滤。与 phase 参数可同时设置(AND 语义)。
-	if cat := strings.TrimSpace(c.Query("category")); cat != "" {
-		phases, types := service.CategoryToFilter(cat)
-		filter.ErrorPhasesAny = phases
-		filter.ErrorTypesAny = types
+	if category := strings.TrimSpace(c.Query("category")); category != "" {
+		filter.ErrorPhasesAny, filter.ErrorTypesAny = service.CategoryToFilter(category)
 	}
-
 	if platform := strings.TrimSpace(c.Query("platform")); platform != "" {
 		filter.Platform = platform
 	}
 	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			response.BadRequest(c, "Invalid group_id")
-			return
+			return nil, fmt.Errorf("Invalid group_id")
 		}
 		filter.GroupID = &id
 	}
 	if v := strings.TrimSpace(c.Query("account_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			response.BadRequest(c, "Invalid account_id")
-			return
+			return nil, fmt.Errorf("Invalid account_id")
 		}
 		filter.AccountID = &id
 	}
-
 	if v := strings.TrimSpace(c.Query("user_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			response.BadRequest(c, "Invalid user_id")
-			return
+			return nil, fmt.Errorf("Invalid user_id")
 		}
 		filter.UserID = &id
 	}
 	if v := strings.TrimSpace(c.Query("api_key_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			response.BadRequest(c, "Invalid api_key_id")
-			return
+			return nil, fmt.Errorf("Invalid api_key_id")
 		}
 		filter.APIKeyID = &id
 	}
 	if v := strings.TrimSpace(c.Query("resolved")); v != "" {
 		switch strings.ToLower(v) {
 		case "1", "true", "yes":
-			b := true
-			filter.Resolved = &b
+			resolved := true
+			filter.Resolved = &resolved
 		case "0", "false", "no":
-			b := false
-			filter.Resolved = &b
+			resolved := false
+			filter.Resolved = &resolved
 		default:
-			response.BadRequest(c, "Invalid resolved")
-			return
+			return nil, fmt.Errorf("Invalid resolved")
 		}
 	}
-	if statusCodesStr := strings.TrimSpace(c.Query("status_codes")); statusCodesStr != "" {
-		parts := strings.Split(statusCodesStr, ",")
-		out := make([]int, 0, len(parts))
+	if raw := strings.TrimSpace(c.Query("status_codes")); raw != "" {
+		parts := strings.Split(raw, ",")
+		filter.StatusCodes = make([]int, 0, len(parts))
 		for _, part := range parts {
-			p := strings.TrimSpace(part)
-			if p == "" {
+			value := strings.TrimSpace(part)
+			if value == "" {
 				continue
 			}
-			n, err := strconv.Atoi(p)
-			if err != nil || n < 0 {
-				response.BadRequest(c, "Invalid status_codes")
-				return
+			statusCode, err := strconv.Atoi(value)
+			if err != nil || statusCode < 0 {
+				return nil, fmt.Errorf("Invalid status_codes")
 			}
-			out = append(out, n)
+			filter.StatusCodes = append(filter.StatusCodes, statusCode)
 		}
-		filter.StatusCodes = out
 	}
 
 	applyOpsErrorSortParams(c, filter)
-
-	result, err := h.opsService.GetErrorLogs(c.Request.Context(), filter)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Paginated(c, result.Errors, int64(result.Total), result.Page, result.PageSize)
+	return filter, nil
 }
 
 // ListRequestErrors lists client-visible request errors.

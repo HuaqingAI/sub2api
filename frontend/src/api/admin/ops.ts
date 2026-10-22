@@ -1124,6 +1124,47 @@ export type OpsErrorListQueryParams = {
   sort_order?: 'asc' | 'desc'
 }
 
+export interface AccountErrorDistributionCategory {
+  category: string
+  count: number
+}
+
+export interface AccountErrorDistributionItem {
+  account_id: number
+  account_name: string
+  total: number
+  categories: AccountErrorDistributionCategory[]
+}
+
+export interface AccountErrorDistributionResponse {
+  accounts: AccountErrorDistributionItem[]
+}
+
+export async function getAccountErrorDistribution(
+  params: Pick<
+    OpsErrorListQueryParams,
+    | 'start_time'
+    | 'end_time'
+    | 'platform'
+    | 'group_id'
+    | 'account_id'
+    | 'user_id'
+    | 'api_key_id'
+    | 'model'
+    | 'request_id'
+    | 'phase'
+    | 'category'
+    | 'status_codes'
+    | 'view'
+  >
+): Promise<AccountErrorDistributionResponse> {
+  const { data } = await apiClient.get<AccountErrorDistributionResponse>(
+    '/admin/ops/account-error-distribution',
+    { params }
+  )
+  return data
+}
+
 // Legacy unified endpoints
 export async function listErrorLogs(params: OpsErrorListQueryParams): Promise<OpsErrorLogsResponse> {
   const { data } = await apiClient.get<OpsErrorLogsResponse>('/admin/ops/errors', { params })
@@ -1335,6 +1376,7 @@ export const opsAPI = {
   listErrorLogs,
   getErrorLogDetail,
   updateErrorResolved,
+  getAccountErrorDistribution,
 
   // New split endpoints
   listRequestErrors,

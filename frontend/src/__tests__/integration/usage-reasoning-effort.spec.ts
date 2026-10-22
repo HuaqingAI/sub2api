@@ -18,6 +18,7 @@ const {
   adminGetModelStats,
   adminGetById,
   listErrorLogs,
+  getAccountErrorDistribution,
 } = vi.hoisted(() => ({
   userQuery: vi.fn(),
   userGetStats: vi.fn(),
@@ -31,6 +32,7 @@ const {
   adminGetModelStats: vi.fn(),
   adminGetById: vi.fn(),
   listErrorLogs: vi.fn(),
+  getAccountErrorDistribution: vi.fn(),
 }))
 
 const messages: Record<string, string> = {
@@ -117,6 +119,7 @@ vi.mock('@/api/admin/usage', () => ({
 
 vi.mock('@/api/admin/ops', () => ({
   listErrorLogs,
+  getAccountErrorDistribution,
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -209,6 +212,7 @@ const sharedPageStubs = {
   GroupDistributionChart: chartStub,
   EndpointDistributionChart: chartStub,
   TokenUsageTrend: chartStub,
+  AccountErrorDistributionChart: chartStub,
   IpGeoCell: true,
   EmptyState: true,
 }
@@ -240,6 +244,7 @@ describe('usage reasoning effort page display', () => {
     adminGetModelStats.mockReset().mockResolvedValue({ models: [] })
     adminGetById.mockReset().mockResolvedValue({ id: 7, email: 'liu.jialin@code-dance.com' })
     listErrorLogs.mockReset().mockResolvedValue({ items: [], total: 0 })
+    getAccountErrorDistribution.mockReset().mockResolvedValue({ accounts: [] })
   })
 
   afterEach(() => {

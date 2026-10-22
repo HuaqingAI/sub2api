@@ -381,6 +381,7 @@ export default {
     requestedReasoningEffort: 'Requested reasoning effort',
     endpoint: 'Endpoint',
     endpointDistribution: 'Endpoint Distribution',
+    accountErrorDistribution: 'Account Error Counts',
     inbound: 'Inbound',
     upstream: 'Upstream',
     mapping: 'Mapping',
