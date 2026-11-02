@@ -169,28 +169,28 @@ func parseOpsErrorLogFilter(c *gin.Context, page, pageSize int) (*service.OpsErr
 	if v := strings.TrimSpace(c.Query("group_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			return nil, fmt.Errorf("Invalid group_id")
+			return nil, fmt.Errorf("invalid group_id")
 		}
 		filter.GroupID = &id
 	}
 	if v := strings.TrimSpace(c.Query("account_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			return nil, fmt.Errorf("Invalid account_id")
+			return nil, fmt.Errorf("invalid account_id")
 		}
 		filter.AccountID = &id
 	}
 	if v := strings.TrimSpace(c.Query("user_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			return nil, fmt.Errorf("Invalid user_id")
+			return nil, fmt.Errorf("invalid user_id")
 		}
 		filter.UserID = &id
 	}
 	if v := strings.TrimSpace(c.Query("api_key_id")); v != "" {
 		id, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || id <= 0 {
-			return nil, fmt.Errorf("Invalid api_key_id")
+			return nil, fmt.Errorf("invalid api_key_id")
 		}
 		filter.APIKeyID = &id
 	}
@@ -203,7 +203,7 @@ func parseOpsErrorLogFilter(c *gin.Context, page, pageSize int) (*service.OpsErr
 			resolved := false
 			filter.Resolved = &resolved
 		default:
-			return nil, fmt.Errorf("Invalid resolved")
+			return nil, fmt.Errorf("invalid resolved")
 		}
 	}
 	if raw := strings.TrimSpace(c.Query("status_codes")); raw != "" {
@@ -216,7 +216,7 @@ func parseOpsErrorLogFilter(c *gin.Context, page, pageSize int) (*service.OpsErr
 			}
 			statusCode, err := strconv.Atoi(value)
 			if err != nil || statusCode < 0 {
-				return nil, fmt.Errorf("Invalid status_codes")
+				return nil, fmt.Errorf("invalid status_codes")
 			}
 			filter.StatusCodes = append(filter.StatusCodes, statusCode)
 		}
