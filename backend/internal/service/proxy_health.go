@@ -69,7 +69,7 @@ func ValidateProxyNodeTestConfig(p *Proxy) error {
 	host := strings.Trim(p.Host, "[]")
 	ip := net.ParseIP(host)
 	if !strings.EqualFold(host, "localhost") && (ip == nil || !ip.IsLoopback()) {
-		return fmt.Errorf("Mihomo node testing requires a loopback business proxy")
+		return fmt.Errorf("mihomo node testing requires a loopback business proxy")
 	}
 	return nil
 }
@@ -281,11 +281,11 @@ func readMihomoRoute(ctx context.Context, endpoint string, p *Proxy) (mihomoRout
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return sample, fmt.Errorf("Mihomo controller unavailable: %w", err)
+		return sample, fmt.Errorf("mihomo controller unavailable: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return sample, fmt.Errorf("Mihomo controller HTTP %d", resp.StatusCode)
+		return sample, fmt.Errorf("mihomo controller HTTP %d", resp.StatusCode)
 	}
 	var payload struct {
 		Proxies map[string]struct {
@@ -300,7 +300,7 @@ func readMihomoRoute(ctx context.Context, endpoint string, p *Proxy) (mihomoRout
 	}
 	group, ok := payload.Proxies[p.MihomoGroup]
 	if !ok || !strings.EqualFold(group.Type, "fallback") || len(group.All) == 0 || group.All[0] != p.MihomoPrimaryNode {
-		return sample, fmt.Errorf("Mihomo fallback group does not match the original node")
+		return sample, fmt.Errorf("mihomo fallback group does not match the original node")
 	}
 	valid := false
 	for _, node := range group.All {
@@ -310,7 +310,7 @@ func readMihomoRoute(ctx context.Context, endpoint string, p *Proxy) (mihomoRout
 		}
 	}
 	if !valid {
-		return sample, fmt.Errorf("Mihomo selected node is absent from group")
+		return sample, fmt.Errorf("mihomo selected node is absent from group")
 	}
 	return mihomoRouteSample{now: group.Now, fixed: group.Fixed != ""}, nil
 }

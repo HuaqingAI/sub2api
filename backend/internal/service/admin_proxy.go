@@ -524,18 +524,6 @@ func proxyQualityFirstCFRay(result *ProxyQualityCheckResult) string {
 	return ""
 }
 
-func proxyQualityBaseConnectivityPass(result *ProxyQualityCheckResult) bool {
-	if result == nil {
-		return false
-	}
-	for _, item := range result.Items {
-		if item.Target == "base_connectivity" {
-			return item.Status == "pass"
-		}
-	}
-	return false
-}
-
 func (s *adminServiceImpl) saveProxyQualitySnapshot(ctx context.Context, proxy *Proxy, result *ProxyQualityCheckResult, exitInfo *ProxyExitInfo) {
 	if result == nil || proxy == nil {
 		return

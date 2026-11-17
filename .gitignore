@@ -135,6 +135,7 @@ vite.config.js
 docs/*
 !docs/agent-resource-safety.md
 !docs/mihomo-proxy-monitoring.md
+!docs/zcldev-customizations.md
 !docs/moego-json-batching.md
 !docs/admin-api-keys.md
 !docs/mcp.md

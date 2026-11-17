@@ -450,7 +450,7 @@ func containsProxyTaskRecipient(recipients []string, wanted string) bool {
 
 func proxyTaskEmailBody(task *ProxyTestTask, targets []*ProxyTestTaskTarget) string {
 	var body strings.Builder
-	body.WriteString("<h2>代理原节点检测失败</h2><p>任务：" + html.EscapeString(task.Name) + "</p>")
+	_, _ = body.WriteString("<h2>代理原节点检测失败</h2><p>任务：" + html.EscapeString(task.Name) + "</p>")
 	loc, err := time.LoadLocation(task.Timezone)
 	if err != nil {
 		loc = time.UTC
@@ -460,11 +460,11 @@ func proxyTaskEmailBody(task *ProxyTestTask, targets []*ProxyTestTaskTarget) str
 		if target.MihomoPrimaryNode != "" {
 			name += "（" + target.MihomoPrimaryNode + "）"
 		}
-		body.WriteString("<h3>" + html.EscapeString(name) + "</h3><ul>")
-		body.WriteString(fmt.Sprintf("<li>连续失败：%d 次</li>", target.ConsecutiveFailures))
-		body.WriteString("<li>原因：" + html.EscapeString(sanitizeProxyTaskError(target.LastError)) + "</li>")
+		_, _ = body.WriteString("<h3>" + html.EscapeString(name) + "</h3><ul>")
+		_, _ = fmt.Fprintf(&body, "<li>连续失败：%d 次</li>", target.ConsecutiveFailures)
+		_, _ = body.WriteString("<li>原因：" + html.EscapeString(sanitizeProxyTaskError(target.LastError)) + "</li>")
 		if target.LastCheckedAt != nil {
-			body.WriteString("<li>检测时间：" + html.EscapeString(target.LastCheckedAt.In(loc).Format("2006-01-02 15:04:05 MST")) + "</li>")
+			_, _ = body.WriteString("<li>检测时间：" + html.EscapeString(target.LastCheckedAt.In(loc).Format("2006-01-02 15:04:05 MST")) + "</li>")
 		}
 		if result := target.LastResult; result != nil {
 			route := result.PreferredNode
@@ -475,13 +475,13 @@ func proxyTaskEmailBody(task *ProxyTestTask, targets []*ProxyTestTaskTarget) str
 			} else if result.IsBackup {
 				route += "（备用）"
 			}
-			body.WriteString("<li>最近同轮新连接首选：" + html.EscapeString(route) + "</li>")
-			body.WriteString("<li>最近同轮业务入口：" + html.EscapeString(result.BusinessStatus) + "</li>")
-			body.WriteString("<li>执行实例：" + html.EscapeString(result.SampledPod) + "</li>")
+			_, _ = body.WriteString("<li>最近同轮新连接首选：" + html.EscapeString(route) + "</li>")
+			_, _ = body.WriteString("<li>最近同轮业务入口：" + html.EscapeString(result.BusinessStatus) + "</li>")
+			_, _ = body.WriteString("<li>执行实例：" + html.EscapeString(result.SampledPod) + "</li>")
 		}
-		body.WriteString("</ul>")
+		_, _ = body.WriteString("</ul>")
 	}
-	body.WriteString("<p>原节点经指定目标探测失败。请检查原节点，必要时自行更换代理配置并重启服务。</p><p>以上为本次探测结果，不表示 GPT 账户不可用，也不表示全部账户或存量连接已迁移。</p>")
+	_, _ = body.WriteString("<p>原节点经指定目标探测失败。请检查原节点，必要时自行更换代理配置并重启服务。</p><p>以上为本次探测结果，不表示 GPT 账户不可用，也不表示全部账户或存量连接已迁移。</p>")
 	return body.String()
 }
 

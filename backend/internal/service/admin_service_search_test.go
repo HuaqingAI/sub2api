@@ -236,7 +236,13 @@ func TestAdminService_ListProxiesWithAccountCount_WithSearch(t *testing.T) {
 		proxies, total, err := svc.ListProxiesWithAccountCount(context.Background(), 2, 10, "socks5", StatusDisabled, "p2", "account_count", "DESC")
 		require.NoError(t, err)
 		require.Equal(t, int64(9), total)
-		require.Equal(t, []ProxyWithAccountCount{{Proxy: Proxy{ID: 3, Name: "p2"}, AccountCount: 5}}, proxies)
+		require.Equal(t, []ProxyWithAccountCount{{
+			Proxy:          Proxy{ID: 3, Name: "p2"},
+			AccountCount:   5,
+			NodeStatus:     ProxyHealthUnknown,
+			BusinessStatus: ProxyHealthUnknown,
+			RouteStatus:    ProxyRouteNotApplicable,
+		}}, proxies)
 
 		require.Equal(t, 1, repo.listWithFiltersAndAccountCountCalls)
 		require.Equal(t, pagination.PaginationParams{Page: 2, PageSize: 10, SortBy: "account_count", SortOrder: "DESC"}, repo.listWithFiltersAndAccountCountParams)
