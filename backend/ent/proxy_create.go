@@ -187,6 +187,48 @@ func (_c *ProxyCreate) SetNillableExpiryWarnDays(v *int) *ProxyCreate {
 	return _c
 }
 
+// SetNodeTestPort sets the "node_test_port" field.
+func (_c *ProxyCreate) SetNodeTestPort(v int) *ProxyCreate {
+	_c.mutation.SetNodeTestPort(v)
+	return _c
+}
+
+// SetNillableNodeTestPort sets the "node_test_port" field if the given value is not nil.
+func (_c *ProxyCreate) SetNillableNodeTestPort(v *int) *ProxyCreate {
+	if v != nil {
+		_c.SetNodeTestPort(*v)
+	}
+	return _c
+}
+
+// SetMihomoPrimaryNode sets the "mihomo_primary_node" field.
+func (_c *ProxyCreate) SetMihomoPrimaryNode(v string) *ProxyCreate {
+	_c.mutation.SetMihomoPrimaryNode(v)
+	return _c
+}
+
+// SetNillableMihomoPrimaryNode sets the "mihomo_primary_node" field if the given value is not nil.
+func (_c *ProxyCreate) SetNillableMihomoPrimaryNode(v *string) *ProxyCreate {
+	if v != nil {
+		_c.SetMihomoPrimaryNode(*v)
+	}
+	return _c
+}
+
+// SetMihomoGroup sets the "mihomo_group" field.
+func (_c *ProxyCreate) SetMihomoGroup(v string) *ProxyCreate {
+	_c.mutation.SetMihomoGroup(v)
+	return _c
+}
+
+// SetNillableMihomoGroup sets the "mihomo_group" field if the given value is not nil.
+func (_c *ProxyCreate) SetNillableMihomoGroup(v *string) *ProxyCreate {
+	if v != nil {
+		_c.SetMihomoGroup(*v)
+	}
+	return _c
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_c *ProxyCreate) AddAccountIDs(ids ...int64) *ProxyCreate {
 	_c.mutation.AddAccountIDs(ids...)
@@ -352,6 +394,16 @@ func (_c *ProxyCreate) check() error {
 	if _, ok := _c.mutation.ExpiryWarnDays(); !ok {
 		return &ValidationError{Name: "expiry_warn_days", err: errors.New(`ent: missing required field "Proxy.expiry_warn_days"`)}
 	}
+	if v, ok := _c.mutation.MihomoPrimaryNode(); ok {
+		if err := proxy.MihomoPrimaryNodeValidator(v); err != nil {
+			return &ValidationError{Name: "mihomo_primary_node", err: fmt.Errorf(`ent: validator failed for field "Proxy.mihomo_primary_node": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.MihomoGroup(); ok {
+		if err := proxy.MihomoGroupValidator(v); err != nil {
+			return &ValidationError{Name: "mihomo_group", err: fmt.Errorf(`ent: validator failed for field "Proxy.mihomo_group": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -430,6 +482,18 @@ func (_c *ProxyCreate) createSpec() (*Proxy, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ExpiryWarnDays(); ok {
 		_spec.SetField(proxy.FieldExpiryWarnDays, field.TypeInt, value)
 		_node.ExpiryWarnDays = value
+	}
+	if value, ok := _c.mutation.NodeTestPort(); ok {
+		_spec.SetField(proxy.FieldNodeTestPort, field.TypeInt, value)
+		_node.NodeTestPort = &value
+	}
+	if value, ok := _c.mutation.MihomoPrimaryNode(); ok {
+		_spec.SetField(proxy.FieldMihomoPrimaryNode, field.TypeString, value)
+		_node.MihomoPrimaryNode = value
+	}
+	if value, ok := _c.mutation.MihomoGroup(); ok {
+		_spec.SetField(proxy.FieldMihomoGroup, field.TypeString, value)
+		_node.MihomoGroup = value
 	}
 	if nodes := _c.mutation.AccountsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -730,6 +794,66 @@ func (u *ProxyUpsert) AddExpiryWarnDays(v int) *ProxyUpsert {
 	return u
 }
 
+// SetNodeTestPort sets the "node_test_port" field.
+func (u *ProxyUpsert) SetNodeTestPort(v int) *ProxyUpsert {
+	u.Set(proxy.FieldNodeTestPort, v)
+	return u
+}
+
+// UpdateNodeTestPort sets the "node_test_port" field to the value that was provided on create.
+func (u *ProxyUpsert) UpdateNodeTestPort() *ProxyUpsert {
+	u.SetExcluded(proxy.FieldNodeTestPort)
+	return u
+}
+
+// AddNodeTestPort adds v to the "node_test_port" field.
+func (u *ProxyUpsert) AddNodeTestPort(v int) *ProxyUpsert {
+	u.Add(proxy.FieldNodeTestPort, v)
+	return u
+}
+
+// ClearNodeTestPort clears the value of the "node_test_port" field.
+func (u *ProxyUpsert) ClearNodeTestPort() *ProxyUpsert {
+	u.SetNull(proxy.FieldNodeTestPort)
+	return u
+}
+
+// SetMihomoPrimaryNode sets the "mihomo_primary_node" field.
+func (u *ProxyUpsert) SetMihomoPrimaryNode(v string) *ProxyUpsert {
+	u.Set(proxy.FieldMihomoPrimaryNode, v)
+	return u
+}
+
+// UpdateMihomoPrimaryNode sets the "mihomo_primary_node" field to the value that was provided on create.
+func (u *ProxyUpsert) UpdateMihomoPrimaryNode() *ProxyUpsert {
+	u.SetExcluded(proxy.FieldMihomoPrimaryNode)
+	return u
+}
+
+// ClearMihomoPrimaryNode clears the value of the "mihomo_primary_node" field.
+func (u *ProxyUpsert) ClearMihomoPrimaryNode() *ProxyUpsert {
+	u.SetNull(proxy.FieldMihomoPrimaryNode)
+	return u
+}
+
+// SetMihomoGroup sets the "mihomo_group" field.
+func (u *ProxyUpsert) SetMihomoGroup(v string) *ProxyUpsert {
+	u.Set(proxy.FieldMihomoGroup, v)
+	return u
+}
+
+// UpdateMihomoGroup sets the "mihomo_group" field to the value that was provided on create.
+func (u *ProxyUpsert) UpdateMihomoGroup() *ProxyUpsert {
+	u.SetExcluded(proxy.FieldMihomoGroup)
+	return u
+}
+
+// ClearMihomoGroup clears the value of the "mihomo_group" field.
+func (u *ProxyUpsert) ClearMihomoGroup() *ProxyUpsert {
+	u.SetNull(proxy.FieldMihomoGroup)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1003,6 +1127,76 @@ func (u *ProxyUpsertOne) AddExpiryWarnDays(v int) *ProxyUpsertOne {
 func (u *ProxyUpsertOne) UpdateExpiryWarnDays() *ProxyUpsertOne {
 	return u.Update(func(s *ProxyUpsert) {
 		s.UpdateExpiryWarnDays()
+	})
+}
+
+// SetNodeTestPort sets the "node_test_port" field.
+func (u *ProxyUpsertOne) SetNodeTestPort(v int) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetNodeTestPort(v)
+	})
+}
+
+// AddNodeTestPort adds v to the "node_test_port" field.
+func (u *ProxyUpsertOne) AddNodeTestPort(v int) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.AddNodeTestPort(v)
+	})
+}
+
+// UpdateNodeTestPort sets the "node_test_port" field to the value that was provided on create.
+func (u *ProxyUpsertOne) UpdateNodeTestPort() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateNodeTestPort()
+	})
+}
+
+// ClearNodeTestPort clears the value of the "node_test_port" field.
+func (u *ProxyUpsertOne) ClearNodeTestPort() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearNodeTestPort()
+	})
+}
+
+// SetMihomoPrimaryNode sets the "mihomo_primary_node" field.
+func (u *ProxyUpsertOne) SetMihomoPrimaryNode(v string) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetMihomoPrimaryNode(v)
+	})
+}
+
+// UpdateMihomoPrimaryNode sets the "mihomo_primary_node" field to the value that was provided on create.
+func (u *ProxyUpsertOne) UpdateMihomoPrimaryNode() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateMihomoPrimaryNode()
+	})
+}
+
+// ClearMihomoPrimaryNode clears the value of the "mihomo_primary_node" field.
+func (u *ProxyUpsertOne) ClearMihomoPrimaryNode() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearMihomoPrimaryNode()
+	})
+}
+
+// SetMihomoGroup sets the "mihomo_group" field.
+func (u *ProxyUpsertOne) SetMihomoGroup(v string) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetMihomoGroup(v)
+	})
+}
+
+// UpdateMihomoGroup sets the "mihomo_group" field to the value that was provided on create.
+func (u *ProxyUpsertOne) UpdateMihomoGroup() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateMihomoGroup()
+	})
+}
+
+// ClearMihomoGroup clears the value of the "mihomo_group" field.
+func (u *ProxyUpsertOne) ClearMihomoGroup() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearMihomoGroup()
 	})
 }
 
@@ -1445,6 +1639,76 @@ func (u *ProxyUpsertBulk) AddExpiryWarnDays(v int) *ProxyUpsertBulk {
 func (u *ProxyUpsertBulk) UpdateExpiryWarnDays() *ProxyUpsertBulk {
 	return u.Update(func(s *ProxyUpsert) {
 		s.UpdateExpiryWarnDays()
+	})
+}
+
+// SetNodeTestPort sets the "node_test_port" field.
+func (u *ProxyUpsertBulk) SetNodeTestPort(v int) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetNodeTestPort(v)
+	})
+}
+
+// AddNodeTestPort adds v to the "node_test_port" field.
+func (u *ProxyUpsertBulk) AddNodeTestPort(v int) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.AddNodeTestPort(v)
+	})
+}
+
+// UpdateNodeTestPort sets the "node_test_port" field to the value that was provided on create.
+func (u *ProxyUpsertBulk) UpdateNodeTestPort() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateNodeTestPort()
+	})
+}
+
+// ClearNodeTestPort clears the value of the "node_test_port" field.
+func (u *ProxyUpsertBulk) ClearNodeTestPort() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearNodeTestPort()
+	})
+}
+
+// SetMihomoPrimaryNode sets the "mihomo_primary_node" field.
+func (u *ProxyUpsertBulk) SetMihomoPrimaryNode(v string) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetMihomoPrimaryNode(v)
+	})
+}
+
+// UpdateMihomoPrimaryNode sets the "mihomo_primary_node" field to the value that was provided on create.
+func (u *ProxyUpsertBulk) UpdateMihomoPrimaryNode() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateMihomoPrimaryNode()
+	})
+}
+
+// ClearMihomoPrimaryNode clears the value of the "mihomo_primary_node" field.
+func (u *ProxyUpsertBulk) ClearMihomoPrimaryNode() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearMihomoPrimaryNode()
+	})
+}
+
+// SetMihomoGroup sets the "mihomo_group" field.
+func (u *ProxyUpsertBulk) SetMihomoGroup(v string) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetMihomoGroup(v)
+	})
+}
+
+// UpdateMihomoGroup sets the "mihomo_group" field to the value that was provided on create.
+func (u *ProxyUpsertBulk) UpdateMihomoGroup() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateMihomoGroup()
+	})
+}
+
+// ClearMihomoGroup clears the value of the "mihomo_group" field.
+func (u *ProxyUpsertBulk) ClearMihomoGroup() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearMihomoGroup()
 	})
 }
 

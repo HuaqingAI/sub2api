@@ -1743,6 +1743,14 @@ func init() {
 	proxyDescExpiryWarnDays := proxyFields[10].Descriptor()
 	// proxy.DefaultExpiryWarnDays holds the default value on creation for the expiry_warn_days field.
 	proxy.DefaultExpiryWarnDays = proxyDescExpiryWarnDays.Default.(int)
+	// proxyDescMihomoPrimaryNode is the schema descriptor for mihomo_primary_node field.
+	proxyDescMihomoPrimaryNode := proxyFields[12].Descriptor()
+	// proxy.MihomoPrimaryNodeValidator is a validator for the "mihomo_primary_node" field. It is called by the builders before save.
+	proxy.MihomoPrimaryNodeValidator = proxyDescMihomoPrimaryNode.Validators[0].(func(string) error)
+	// proxyDescMihomoGroup is the schema descriptor for mihomo_group field.
+	proxyDescMihomoGroup := proxyFields[13].Descriptor()
+	// proxy.MihomoGroupValidator is a validator for the "mihomo_group" field. It is called by the builders before save.
+	proxy.MihomoGroupValidator = proxyDescMihomoGroup.Validators[0].(func(string) error)
 	redeemcodeFields := schema.RedeemCode{}.Fields()
 	_ = redeemcodeFields
 	// redeemcodeDescCode is the schema descriptor for code field.

@@ -45,6 +45,12 @@ type Proxy struct {
 	BackupProxyID *int64 `json:"backup_proxy_id,omitempty"`
 	// Days before expiry to flag as expiring-soon (per proxy).
 	ExpiryWarnDays int `json:"expiry_warn_days,omitempty"`
+	// Loopback SOCKS port pinned to the original Mihomo node.
+	NodeTestPort *int `json:"node_test_port,omitempty"`
+	// Original node used by this business entry.
+	MihomoPrimaryNode string `json:"mihomo_primary_node,omitempty"`
+	// Independent fallback group used by this business entry.
+	MihomoGroup string `json:"mihomo_group,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ProxyQuery when eager-loading is set.
 	Edges        ProxyEdges `json:"edges"`
@@ -98,9 +104,9 @@ func (*Proxy) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case proxy.FieldID, proxy.FieldPort, proxy.FieldBackupProxyID, proxy.FieldExpiryWarnDays:
+		case proxy.FieldID, proxy.FieldPort, proxy.FieldBackupProxyID, proxy.FieldExpiryWarnDays, proxy.FieldNodeTestPort:
 			values[i] = new(sql.NullInt64)
-		case proxy.FieldName, proxy.FieldProtocol, proxy.FieldHost, proxy.FieldUsername, proxy.FieldPassword, proxy.FieldStatus, proxy.FieldFallbackMode:
+		case proxy.FieldName, proxy.FieldProtocol, proxy.FieldHost, proxy.FieldUsername, proxy.FieldPassword, proxy.FieldStatus, proxy.FieldFallbackMode, proxy.FieldMihomoPrimaryNode, proxy.FieldMihomoGroup:
 			values[i] = new(sql.NullString)
 		case proxy.FieldCreatedAt, proxy.FieldUpdatedAt, proxy.FieldDeletedAt, proxy.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
@@ -214,6 +220,25 @@ func (_m *Proxy) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ExpiryWarnDays = int(value.Int64)
 			}
+		case proxy.FieldNodeTestPort:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field node_test_port", values[i])
+			} else if value.Valid {
+				_m.NodeTestPort = new(int)
+				*_m.NodeTestPort = int(value.Int64)
+			}
+		case proxy.FieldMihomoPrimaryNode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field mihomo_primary_node", values[i])
+			} else if value.Valid {
+				_m.MihomoPrimaryNode = value.String
+			}
+		case proxy.FieldMihomoGroup:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field mihomo_group", values[i])
+			} else if value.Valid {
+				_m.MihomoGroup = value.String
+			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -316,6 +341,17 @@ func (_m *Proxy) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("expiry_warn_days=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ExpiryWarnDays))
+	builder.WriteString(", ")
+	if v := _m.NodeTestPort; v != nil {
+		builder.WriteString("node_test_port=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("mihomo_primary_node=")
+	builder.WriteString(_m.MihomoPrimaryNode)
+	builder.WriteString(", ")
+	builder.WriteString("mihomo_group=")
+	builder.WriteString(_m.MihomoGroup)
 	builder.WriteByte(')')
 	return builder.String()
 }

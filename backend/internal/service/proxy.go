@@ -14,20 +14,23 @@ const (
 )
 
 type Proxy struct {
-	ID             int64
-	Name           string
-	Protocol       string
-	Host           string
-	Port           int
-	Username       string
-	Password       string
-	Status         string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	ExpiresAt      *time.Time
-	FallbackMode   string
-	BackupProxyID  *int64
-	ExpiryWarnDays int
+	ID                int64
+	Name              string
+	Protocol          string
+	Host              string
+	Port              int
+	Username          string
+	Password          string
+	Status            string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	ExpiresAt         *time.Time
+	FallbackMode      string
+	BackupProxyID     *int64
+	ExpiryWarnDays    int
+	NodeTestPort      *int
+	MihomoPrimaryNode string
+	MihomoGroup       string
 }
 
 func (p *Proxy) IsActive() bool {
@@ -52,20 +55,34 @@ func (p *Proxy) URL() string {
 
 type ProxyWithAccountCount struct {
 	Proxy
-	AccountCount   int64
-	LatencyMs      *int64
-	LatencyStatus  string
-	LatencyMessage string
-	IPAddress      string
-	Country        string
-	CountryCode    string
-	Region         string
-	City           string
-	QualityStatus  string
-	QualityScore   *int
-	QualityGrade   string
-	QualitySummary string
-	QualityChecked *int64
+	AccountCount       int64
+	LatencyMs          *int64
+	LatencyStatus      string
+	LatencyMessage     string
+	IPAddress          string
+	Country            string
+	CountryCode        string
+	Region             string
+	City               string
+	QualityStatus      string
+	QualityScore       *int
+	QualityGrade       string
+	QualitySummary     string
+	QualityChecked     *int64
+	NodeStatus         string
+	NodeCheckedAt      *time.Time
+	BusinessStatus     string
+	BusinessLatencyMs  *int64
+	BusinessCheckedAt  *time.Time
+	PreferredNode      string
+	IsBackup           bool
+	RouteStatus        string
+	RouteCheckedAt     *time.Time
+	RouteError         string
+	RouteFixed         bool
+	SampleID           string
+	SampledPod         string
+	ProbeConfigVersion string
 }
 
 type ProxyAccountSummary struct {

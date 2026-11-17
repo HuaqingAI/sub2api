@@ -36,18 +36,21 @@ type DataPayload struct {
 }
 
 type DataProxy struct {
-	ProxyKey        string `json:"proxy_key"`
-	Name            string `json:"name"`
-	Protocol        string `json:"protocol"`
-	Host            string `json:"host"`
-	Port            int    `json:"port"`
-	Username        string `json:"username,omitempty"`
-	Password        string `json:"password,omitempty"`
-	Status          string `json:"status"`
-	ExpiresAt       *int64 `json:"expires_at,omitempty"`        // unix 秒，与 DataAccount.ExpiresAt 风格一致
-	FallbackMode    string `json:"fallback_mode,omitempty"`     // none/direct/proxy
-	BackupProxyName string `json:"backup_proxy_name,omitempty"` // 备用代理 name（跨实例按 name 反查）
-	ExpiryWarnDays  int    `json:"expiry_warn_days,omitempty"`
+	NodeTestPort      *int   `json:"node_test_port,omitempty"`
+	MihomoPrimaryNode string `json:"mihomo_primary_node,omitempty"`
+	MihomoGroup       string `json:"mihomo_group,omitempty"`
+	ProxyKey          string `json:"proxy_key"`
+	Name              string `json:"name"`
+	Protocol          string `json:"protocol"`
+	Host              string `json:"host"`
+	Port              int    `json:"port"`
+	Username          string `json:"username,omitempty"`
+	Password          string `json:"password,omitempty"`
+	Status            string `json:"status"`
+	ExpiresAt         *int64 `json:"expires_at,omitempty"`        // unix 秒，与 DataAccount.ExpiresAt 风格一致
+	FallbackMode      string `json:"fallback_mode,omitempty"`     // none/direct/proxy
+	BackupProxyName   string `json:"backup_proxy_name,omitempty"` // 备用代理 name（跨实例按 name 反查）
+	ExpiryWarnDays    int    `json:"expiry_warn_days,omitempty"`
 }
 
 // DataAccount 是管理员显式备份导出使用的账号结构，故意不走 dto.Account 的脱敏路径，
@@ -170,18 +173,21 @@ func (h *AccountHandler) ExportData(c *gin.Context) {
 			backupProxyName = proxyNameByID[*p.BackupProxyID]
 		}
 		dataProxies = append(dataProxies, DataProxy{
-			ProxyKey:        key,
-			Name:            p.Name,
-			Protocol:        p.Protocol,
-			Host:            p.Host,
-			Port:            p.Port,
-			Username:        p.Username,
-			Password:        p.Password,
-			Status:          p.Status,
-			ExpiresAt:       expiresAt,
-			FallbackMode:    p.FallbackMode,
-			BackupProxyName: backupProxyName,
-			ExpiryWarnDays:  p.ExpiryWarnDays,
+			NodeTestPort:      p.NodeTestPort,
+			MihomoPrimaryNode: p.MihomoPrimaryNode,
+			MihomoGroup:       p.MihomoGroup,
+			ProxyKey:          key,
+			Name:              p.Name,
+			Protocol:          p.Protocol,
+			Host:              p.Host,
+			Port:              p.Port,
+			Username:          p.Username,
+			Password:          p.Password,
+			Status:            p.Status,
+			ExpiresAt:         expiresAt,
+			FallbackMode:      p.FallbackMode,
+			BackupProxyName:   backupProxyName,
+			ExpiryWarnDays:    p.ExpiryWarnDays,
 		})
 	}
 
@@ -352,16 +358,19 @@ func (h *AccountHandler) importData(ctx context.Context, req DataImportRequest) 
 		}
 
 		created, createErr := h.adminService.CreateProxy(ctx, &service.CreateProxyInput{
-			Name:           defaultProxyName(item.Name),
-			Protocol:       item.Protocol,
-			Host:           item.Host,
-			Port:           item.Port,
-			Username:       item.Username,
-			Password:       item.Password,
-			ExpiresAt:      expiresAt,
-			FallbackMode:   fallbackMode,
-			BackupProxyID:  backupProxyID,
-			ExpiryWarnDays: item.ExpiryWarnDays,
+			NodeTestPort:      item.NodeTestPort,
+			MihomoPrimaryNode: item.MihomoPrimaryNode,
+			MihomoGroup:       item.MihomoGroup,
+			Name:              defaultProxyName(item.Name),
+			Protocol:          item.Protocol,
+			Host:              item.Host,
+			Port:              item.Port,
+			Username:          item.Username,
+			Password:          item.Password,
+			ExpiresAt:         expiresAt,
+			FallbackMode:      fallbackMode,
+			BackupProxyID:     backupProxyID,
+			ExpiryWarnDays:    item.ExpiryWarnDays,
 		})
 		if createErr != nil {
 			result.ProxyFailed++
@@ -656,6 +665,12 @@ func validateDataHeader(payload DataPayload) error {
 }
 
 func validateDataProxy(item DataProxy) error {
+	if err := service.ValidateProxyNodeTestConfig(&service.Proxy{
+		Protocol: item.Protocol, Host: item.Host, Port: item.Port,
+		NodeTestPort: item.NodeTestPort, MihomoPrimaryNode: item.MihomoPrimaryNode, MihomoGroup: item.MihomoGroup,
+	}); err != nil {
+		return err
+	}
 	if strings.TrimSpace(item.Protocol) == "" {
 		return errors.New("proxy protocol is required")
 	}

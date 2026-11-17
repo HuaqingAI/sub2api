@@ -67,18 +67,21 @@ func (h *ProxyHandler) ExportData(c *gin.Context) {
 			backupProxyName = proxyNameByID[*p.BackupProxyID]
 		}
 		dataProxies = append(dataProxies, DataProxy{
-			ProxyKey:        key,
-			Name:            p.Name,
-			Protocol:        p.Protocol,
-			Host:            p.Host,
-			Port:            p.Port,
-			Username:        p.Username,
-			Password:        p.Password,
-			Status:          p.Status,
-			ExpiresAt:       expiresAt,
-			FallbackMode:    p.FallbackMode,
-			BackupProxyName: backupProxyName,
-			ExpiryWarnDays:  p.ExpiryWarnDays,
+			NodeTestPort:      p.NodeTestPort,
+			MihomoPrimaryNode: p.MihomoPrimaryNode,
+			MihomoGroup:       p.MihomoGroup,
+			ProxyKey:          key,
+			Name:              p.Name,
+			Protocol:          p.Protocol,
+			Host:              p.Host,
+			Port:              p.Port,
+			Username:          p.Username,
+			Password:          p.Password,
+			Status:            p.Status,
+			ExpiresAt:         expiresAt,
+			FallbackMode:      p.FallbackMode,
+			BackupProxyName:   backupProxyName,
+			ExpiryWarnDays:    p.ExpiryWarnDays,
 		})
 	}
 
@@ -224,16 +227,19 @@ func (h *ProxyHandler) ImportData(c *gin.Context) {
 		}
 
 		created, err := h.adminService.CreateProxy(ctx, &service.CreateProxyInput{
-			Name:           defaultProxyName(item.Name),
-			Protocol:       item.Protocol,
-			Host:           item.Host,
-			Port:           item.Port,
-			Username:       item.Username,
-			Password:       item.Password,
-			ExpiresAt:      expiresAt,
-			FallbackMode:   fallbackMode,
-			BackupProxyID:  backupProxyID,
-			ExpiryWarnDays: item.ExpiryWarnDays,
+			NodeTestPort:      item.NodeTestPort,
+			MihomoPrimaryNode: item.MihomoPrimaryNode,
+			MihomoGroup:       item.MihomoGroup,
+			Name:              defaultProxyName(item.Name),
+			Protocol:          item.Protocol,
+			Host:              item.Host,
+			Port:              item.Port,
+			Username:          item.Username,
+			Password:          item.Password,
+			ExpiresAt:         expiresAt,
+			FallbackMode:      fallbackMode,
+			BackupProxyID:     backupProxyID,
+			ExpiryWarnDays:    item.ExpiryWarnDays,
 		})
 		if err != nil {
 			result.ProxyFailed++

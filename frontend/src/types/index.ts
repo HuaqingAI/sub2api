@@ -960,7 +960,43 @@ export interface ClaudeModel {
   created_at: string
 }
 
-export interface Proxy {
+export type ProxyNodeStatus = 'healthy' | 'unhealthy' | 'unknown'
+
+export interface ProxyHealthSnapshot {
+  node_status?: ProxyNodeStatus
+  node_checked_at?: string | null
+  business_status?: ProxyNodeStatus
+  business_latency_ms?: number | null
+  business_checked_at?: string | null
+  preferred_node?: string
+  is_backup?: boolean
+  route_status?: 'healthy' | 'unknown' | 'switching' | 'not_applicable'
+  route_checked_at?: string | null
+  route_error?: string
+  route_fixed?: boolean
+  sample_id?: string
+  sampled_pod?: string
+  probe_config_version?: string
+}
+
+export interface ProxyTestResult extends ProxyHealthSnapshot {
+  success: boolean
+  message: string
+  latency_ms?: number
+  ip_address?: string
+  city?: string
+  region?: string
+  country?: string
+  country_code?: string
+}
+
+export interface ProxyNodeTestConfig {
+  node_test_port?: number | null
+  mihomo_primary_node?: string
+  mihomo_group?: string
+}
+
+export interface Proxy extends ProxyHealthSnapshot, ProxyNodeTestConfig {
   id: number
   name: string
   protocol: ProxyProtocol
@@ -971,7 +1007,7 @@ export interface Proxy {
   status: 'active' | 'inactive' | 'expired'
   account_count?: number // Number of accounts using this proxy
   latency_ms?: number
-  latency_status?: 'success' | 'failed'
+  latency_status?: 'success' | 'failed' | 'unknown'
   latency_message?: string
   ip_address?: string
   country?: string
@@ -1669,7 +1705,7 @@ export interface CheckMixedChannelResponse {
   details?: MixedChannelWarningDetails
 }
 
-export interface CreateProxyRequest {
+export interface CreateProxyRequest extends ProxyNodeTestConfig {
   name: string
   protocol: ProxyProtocol
   host: string
@@ -1682,7 +1718,7 @@ export interface CreateProxyRequest {
   expiry_warn_days?: number
 }
 
-export interface UpdateProxyRequest {
+export interface UpdateProxyRequest extends ProxyNodeTestConfig {
   name?: string
   protocol?: ProxyProtocol
   host?: string
@@ -2574,3 +2610,45 @@ export type {
   PlatformQuotaWindow,
   PlatformQuotasResponse,
 } from '@/api/admin/users'
+
+export interface ProxyTestTaskTarget {
+  proxy_id: number
+  proxy_name?: string
+  mihomo_primary_node?: string
+  last_node_status?: ProxyNodeStatus
+  last_checked_at?: string | null
+  last_error?: string
+  consecutive_failures: number
+  failure_started_at?: string | null
+  notified_recipients?: string[]
+  last_result?: ProxyTestResult | null
+}
+
+export interface ProxyTestTask {
+  id: number
+  name: string
+  proxy_ids: number[]
+  cron_expression: string
+  timezone: string
+  enabled: boolean
+  recipients: string[]
+  failure_threshold: number
+  timeout_seconds: number
+  last_run_at?: string | null
+  next_run_at?: string | null
+  last_run_status?: string
+  last_error?: string
+  targets?: ProxyTestTaskTarget[]
+  smtp_configured?: boolean
+}
+
+export interface CreateProxyTestTaskRequest {
+  name: string
+  proxy_ids: number[]
+  cron_expression: string
+  timezone: string
+  enabled: boolean
+  recipients: string[]
+  failure_threshold: number
+  timeout_seconds: number
+}

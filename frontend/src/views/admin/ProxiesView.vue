@@ -79,6 +79,10 @@
             <button @click="showExportDataDialog = true" class="btn btn-secondary">
               {{ selectedCount > 0 ? t('admin.proxies.dataExportSelected') : t('admin.proxies.dataExport') }}
             </button>
+            <button @click="showProxyTasks = true" class="btn btn-secondary">
+              <Icon name="calendar" size="md" class="mr-2" />
+              {{ t('admin.proxyTestTasks.title') }}
+            </button>
             <button @click="showCreateModal = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.proxies.createProxy') }}
@@ -242,6 +246,16 @@
                 </span>
               </div>
             </div>
+          </template>
+
+          <template #cell-node_status="{ row }">
+            <ProxyHealthCell :proxy="row" kind="node" :now="healthNow" />
+          </template>
+          <template #cell-preferred_node="{ row }">
+            <ProxyHealthCell :proxy="row" kind="route" :now="healthNow" />
+          </template>
+          <template #cell-business_status="{ row }">
+            <ProxyHealthCell :proxy="row" kind="business" :now="healthNow" />
           </template>
 
           <template #cell-expiry="{ row }">
@@ -515,6 +529,7 @@
           />
           <input v-model="createForm.expires_at" type="date" max="9999-12-31" class="input" />
         </div>
+        <ProxyNodeTestConfig v-model="createForm.mihomo_primary_node" />
         <div>
           <label class="input-label">{{ t('admin.proxies.fallbackMode') }}</label>
           <Select v-model="createForm.fallback_mode" :options="[
@@ -748,6 +763,7 @@
           />
           <input v-model="editForm.expires_at" type="date" max="9999-12-31" class="input" />
         </div>
+        <ProxyNodeTestConfig v-model="editForm.mihomo_primary_node" />
         <div>
           <label class="input-label">{{ t('admin.proxies.fallbackMode') }}</label>
           <Select v-model="editForm.fallback_mode" :options="[
@@ -916,6 +932,14 @@
       </template>
     </BaseDialog>
 
+    <ProxyTestTasksPanel
+      :show="showProxyTasks"
+      :selected-ids="Array.from(selectedProxyIds)"
+      :now="healthNow"
+      @close="showProxyTasks = false"
+      @refreshed="loadProxies"
+    />
+
     <!-- Proxy Accounts Dialog -->
     <BaseDialog
       :show="showAccountsModal"
@@ -968,7 +992,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { Proxy, ProxyAccountSummary, ProxyProtocol, ProxyQualityCheckResult } from '@/types'
+import type { Proxy, ProxyAccountSummary, ProxyProtocol, ProxyQualityCheckResult, ProxyTestResult } from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -978,6 +1002,10 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ImportDataModal from '@/components/admin/proxy/ImportDataModal.vue'
+import ProxyHealthCell from '@/components/admin/proxy/ProxyHealthCell.vue'
+import ProxyNodeTestConfig from '@/components/admin/proxy/ProxyNodeTestConfig.vue'
+import ProxyTestTasksPanel from '@/components/admin/proxy/ProxyTestTasksPanel.vue'
+import { mihomoNodeConfig } from '@/utils/proxyMonitoring'
 import Select from '@/components/common/Select.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -991,6 +1019,9 @@ import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const healthNow = ref(Date.now())
+const showProxyTasks = ref(false)
+let healthClock: ReturnType<typeof setInterval> | undefined
 const { copyToClipboard } = useClipboard()
 
 const columns = computed<Column[]>(() => [
@@ -1002,6 +1033,9 @@ const columns = computed<Column[]>(() => [
   { key: 'location', label: t('admin.proxies.columns.location'), sortable: false },
   { key: 'account_count', label: t('admin.proxies.columns.accounts'), sortable: true },
   { key: 'latency', label: t('admin.proxies.columns.latency'), sortable: false },
+  { key: 'node_status', label: t('admin.proxyMonitoring.nodeStatus'), sortable: false },
+  { key: 'preferred_node', label: t('admin.proxyMonitoring.currentExit'), sortable: false },
+  { key: 'business_status', label: t('admin.proxyMonitoring.businessStatus'), sortable: false },
   { key: 'expiry', label: t('admin.proxies.columns.expiry'), sortable: true },
   { key: 'created_at', label: t('admin.proxies.columns.createdAt'), sortable: true },
   { key: 'status', label: t('admin.proxies.columns.status'), sortable: true },
@@ -1132,6 +1166,7 @@ const createForm = reactive({
   fallback_mode: 'none' as 'none' | 'proxy' | 'direct',
   backup_proxy_id: null as number | null,
   expiry_warn_days: 7 as number,
+  mihomo_primary_node: '',
 })
 
 const editForm = reactive({
@@ -1146,6 +1181,7 @@ const editForm = reactive({
   fallback_mode: 'none' as 'none' | 'proxy' | 'direct',
   backup_proxy_id: null as number | null,
   expiry_warn_days: 7 as number,
+  mihomo_primary_node: '',
 })
 
 const allProxiesForBackup = ref<Proxy[]>([])
@@ -1266,6 +1302,7 @@ const closeCreateModal = () => {
   createForm.fallback_mode = 'none'
   createForm.backup_proxy_id = null
   createForm.expiry_warn_days = 7
+  createForm.mihomo_primary_node = ''
   createPasswordVisible.value = false
   batchInput.value = ''
   batchParseResult.total = 0
@@ -1402,6 +1439,7 @@ const handleCreateProxy = async () => {
       fallback_mode: createForm.fallback_mode,
       backup_proxy_id: createForm.fallback_mode === 'proxy' ? createForm.backup_proxy_id : null,
       expiry_warn_days: createForm.expiry_warn_days,
+      ...mihomoNodeConfig(createForm.mihomo_primary_node),
     })
     appStore.showSuccess(t('admin.proxies.proxyCreated'))
     closeCreateModal()
@@ -1427,6 +1465,7 @@ const handleEdit = (proxy: Proxy) => {
   editForm.fallback_mode = proxy.fallback_mode || 'none'
   editForm.backup_proxy_id = proxy.backup_proxy_id ?? null
   editForm.expiry_warn_days = proxy.expiry_warn_days ?? 7
+  editForm.mihomo_primary_node = proxy.mihomo_primary_node || ''
   editPasswordVisible.value = false
   editPasswordDirty.value = false
   showEditModal.value = true
@@ -1467,6 +1506,7 @@ const handleUpdateProxy = async () => {
       fallback_mode: editForm.fallback_mode,
       backup_proxy_id: editForm.fallback_mode === 'proxy' ? editForm.backup_proxy_id : null,
       expiry_warn_days: editForm.expiry_warn_days,
+      ...mihomoNodeConfig(editForm.mihomo_primary_node),
     }
 
     // Only include password if user actually modified the field
@@ -1488,16 +1528,7 @@ const handleUpdateProxy = async () => {
 
 const applyLatencyResult = (
   proxyId: number,
-  result: {
-    success: boolean
-    latency_ms?: number
-    message?: string
-    ip_address?: string
-    country?: string
-    country_code?: string
-    region?: string
-    city?: string
-  }
+  result: ProxyTestResult
 ) => {
   const target = proxies.value.find((proxy) => proxy.id === proxyId)
   if (!target) return
@@ -1510,7 +1541,7 @@ const applyLatencyResult = (
     target.region = result.region
     target.city = result.city
   } else {
-    target.latency_status = 'failed'
+    target.latency_status = result.node_status === 'unknown' ? 'unknown' : 'failed'
     target.latency_ms = undefined
     target.ip_address = undefined
     target.country = undefined
@@ -1519,6 +1550,15 @@ const applyLatencyResult = (
     target.city = undefined
   }
   target.latency_message = result.message
+  // Only a complete connectivity refresh owns these three columns. Quality
+  // checks have their own timestamps and must not overwrite this snapshot.
+  if (result.node_status !== undefined) {
+    const fields = ['node_status', 'node_checked_at', 'business_status', 'business_latency_ms',
+      'business_checked_at', 'preferred_node', 'is_backup', 'route_status', 'route_checked_at',
+      'route_error', 'route_fixed', 'sample_id', 'sampled_pod', 'probe_config_version'] as const
+    for (const key of fields) Object.assign(target, { [key]: result[key] })
+    healthNow.value = Date.now()
+  }
 }
 
 const summarizeQualityStatus = (result: ProxyQualityCheckResult): Proxy['quality_status'] => {
@@ -1566,10 +1606,22 @@ const stopQualityCheckingProxy = (proxyId: number) => {
   qualityCheckingProxyIds.value = next
 }
 
+const proxyTestVersions = new Map<number, number>()
+const probeConfigSignature = (proxy?: Proxy) => proxy ? JSON.stringify([
+  proxy.updated_at, proxy.protocol, proxy.host, proxy.port, proxy.username, proxy.password,
+  proxy.node_test_port, proxy.mihomo_primary_node, proxy.mihomo_group
+]) : ''
+
 const runProxyTest = async (proxyId: number, notify: boolean) => {
+  const version = (proxyTestVersions.get(proxyId) || 0) + 1
+  proxyTestVersions.set(proxyId, version)
+  const signature = probeConfigSignature(proxies.value.find(proxy => proxy.id === proxyId))
+  const isCurrent = () => proxyTestVersions.get(proxyId) === version &&
+    signature === probeConfigSignature(proxies.value.find(proxy => proxy.id === proxyId))
   startTestingProxy(proxyId)
   try {
     const result = await adminAPI.proxies.testProxy(proxyId)
+    if (!isCurrent()) return result
     applyLatencyResult(proxyId, result)
     if (notify) {
       if (result.success) {
@@ -1583,15 +1635,18 @@ const runProxyTest = async (proxyId: number, notify: boolean) => {
     }
     return result
   } catch (error: any) {
+    if (!isCurrent()) return null
     const message = error.response?.data?.detail || t('admin.proxies.failedToTest')
-    applyLatencyResult(proxyId, { success: false, message })
+    const checkedAt = new Date().toISOString()
+    applyLatencyResult(proxyId, { success: false, message, node_status: 'unknown', node_checked_at: checkedAt,
+      business_status: 'unknown', business_checked_at: checkedAt, route_status: 'unknown', route_checked_at: checkedAt })
     if (notify) {
       appStore.showError(message)
     }
     console.error('Error testing proxy:', error)
     return null
   } finally {
-    stopTestingProxy(proxyId)
+    if (proxyTestVersions.get(proxyId) === version) stopTestingProxy(proxyId)
   }
 }
 
@@ -1600,9 +1655,11 @@ const handleTestConnection = async (proxy: Proxy) => {
 }
 
 const handleQualityCheck = async (proxy: Proxy) => {
+  const signature = probeConfigSignature(proxy)
   startQualityCheckingProxy(proxy.id)
   try {
     const result = await adminAPI.proxies.checkProxyQuality(proxy.id)
+    if (signature !== probeConfigSignature(proxies.value.find(item => item.id === proxy.id))) return
     qualityReportProxy.value = proxy
     qualityReport.value = result
     showQualityReportDialog.value = true
@@ -1646,9 +1703,11 @@ const runBatchProxyQualityChecks = async (ids: number[]) => {
     while (index < ids.length) {
       const current = ids[index]
       index++
+      const signature = probeConfigSignature(proxies.value.find(proxy => proxy.id === current))
       startQualityCheckingProxy(current)
       try {
         const result = await adminAPI.proxies.checkProxyQuality(current)
+        if (signature !== probeConfigSignature(proxies.value.find(proxy => proxy.id === current))) continue
         const target = proxies.value.find((proxy) => proxy.id === current)
         if (target) {
           const baseStep = result.items.find((item) => item.target === 'base_connectivity')
@@ -2076,12 +2135,14 @@ function closeCopyMenu() {
 }
 
 onMounted(() => {
+  healthClock = setInterval(() => { healthNow.value = Date.now() }, 30_000)
   loadProxies()
   loadBackupProxyOptions()
   document.addEventListener('click', closeCopyMenu)
 })
 
 onUnmounted(() => {
+  if (healthClock) clearInterval(healthClock)
   clearTimeout(searchTimeout)
   abortController?.abort()
   document.removeEventListener('click', closeCopyMenu)

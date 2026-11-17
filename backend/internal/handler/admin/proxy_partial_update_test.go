@@ -58,3 +58,35 @@ func TestProxyHandlerUpdatePreservesFieldPresence(t *testing.T) {
 		})
 	}
 }
+
+func TestProxyHandlerNodeTestFieldPresence(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, tc := range []struct {
+		name, body string
+		port       *int
+		clear      bool
+		status     int
+	}{
+		{name: "omitted preserves binding", body: `{"name":"renamed"}`, status: http.StatusOK},
+		{name: "null clears binding", body: `{"node_test_port":null}`, clear: true, status: http.StatusOK},
+		{name: "explicit original node", body: `{"node_test_port":17903,"mihomo_primary_node":"us1","mihomo_group":"us1-fallback"}`, port: func() *int { v := 17903; return &v }(), status: http.StatusOK},
+		{name: "invalid port", body: `{"node_test_port":65536}`, status: http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &proxyPartialUpdateService{}
+			router := gin.New()
+			router.PUT("/proxies/:id", NewProxyHandler(svc).Update)
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPut, "/proxies/9", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			router.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			if tc.status == http.StatusOK {
+				require.Equal(t, tc.port, svc.input.NodeTestPort)
+				require.Equal(t, tc.clear, svc.input.ClearNodeTest)
+			} else {
+				require.Nil(t, svc.input)
+			}
+		})
+	}
+}

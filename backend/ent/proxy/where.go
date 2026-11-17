@@ -125,6 +125,21 @@ func ExpiryWarnDays(v int) predicate.Proxy {
 	return predicate.Proxy(sql.FieldEQ(FieldExpiryWarnDays, v))
 }
 
+// NodeTestPort applies equality check predicate on the "node_test_port" field. It's identical to NodeTestPortEQ.
+func NodeTestPort(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldNodeTestPort, v))
+}
+
+// MihomoPrimaryNode applies equality check predicate on the "mihomo_primary_node" field. It's identical to MihomoPrimaryNodeEQ.
+func MihomoPrimaryNode(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoGroup applies equality check predicate on the "mihomo_group" field. It's identical to MihomoGroupEQ.
+func MihomoGroup(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldMihomoGroup, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.Proxy {
 	return predicate.Proxy(sql.FieldEQ(FieldCreatedAt, v))
@@ -888,6 +903,206 @@ func ExpiryWarnDaysLT(v int) predicate.Proxy {
 // ExpiryWarnDaysLTE applies the LTE predicate on the "expiry_warn_days" field.
 func ExpiryWarnDaysLTE(v int) predicate.Proxy {
 	return predicate.Proxy(sql.FieldLTE(FieldExpiryWarnDays, v))
+}
+
+// NodeTestPortEQ applies the EQ predicate on the "node_test_port" field.
+func NodeTestPortEQ(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldNodeTestPort, v))
+}
+
+// NodeTestPortNEQ applies the NEQ predicate on the "node_test_port" field.
+func NodeTestPortNEQ(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNEQ(FieldNodeTestPort, v))
+}
+
+// NodeTestPortIn applies the In predicate on the "node_test_port" field.
+func NodeTestPortIn(vs ...int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldIn(FieldNodeTestPort, vs...))
+}
+
+// NodeTestPortNotIn applies the NotIn predicate on the "node_test_port" field.
+func NodeTestPortNotIn(vs ...int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotIn(FieldNodeTestPort, vs...))
+}
+
+// NodeTestPortGT applies the GT predicate on the "node_test_port" field.
+func NodeTestPortGT(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGT(FieldNodeTestPort, v))
+}
+
+// NodeTestPortGTE applies the GTE predicate on the "node_test_port" field.
+func NodeTestPortGTE(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGTE(FieldNodeTestPort, v))
+}
+
+// NodeTestPortLT applies the LT predicate on the "node_test_port" field.
+func NodeTestPortLT(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLT(FieldNodeTestPort, v))
+}
+
+// NodeTestPortLTE applies the LTE predicate on the "node_test_port" field.
+func NodeTestPortLTE(v int) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLTE(FieldNodeTestPort, v))
+}
+
+// NodeTestPortIsNil applies the IsNil predicate on the "node_test_port" field.
+func NodeTestPortIsNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldIsNull(FieldNodeTestPort))
+}
+
+// NodeTestPortNotNil applies the NotNil predicate on the "node_test_port" field.
+func NodeTestPortNotNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotNull(FieldNodeTestPort))
+}
+
+// MihomoPrimaryNodeEQ applies the EQ predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeEQ(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeNEQ applies the NEQ predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeNEQ(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNEQ(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeIn applies the In predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeIn(vs ...string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldIn(FieldMihomoPrimaryNode, vs...))
+}
+
+// MihomoPrimaryNodeNotIn applies the NotIn predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeNotIn(vs ...string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotIn(FieldMihomoPrimaryNode, vs...))
+}
+
+// MihomoPrimaryNodeGT applies the GT predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeGT(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGT(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeGTE applies the GTE predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeGTE(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGTE(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeLT applies the LT predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeLT(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLT(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeLTE applies the LTE predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeLTE(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLTE(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeContains applies the Contains predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeContains(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldContains(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeHasPrefix applies the HasPrefix predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeHasPrefix(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldHasPrefix(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeHasSuffix applies the HasSuffix predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeHasSuffix(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldHasSuffix(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeIsNil applies the IsNil predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeIsNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldIsNull(FieldMihomoPrimaryNode))
+}
+
+// MihomoPrimaryNodeNotNil applies the NotNil predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeNotNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotNull(FieldMihomoPrimaryNode))
+}
+
+// MihomoPrimaryNodeEqualFold applies the EqualFold predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeEqualFold(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEqualFold(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoPrimaryNodeContainsFold applies the ContainsFold predicate on the "mihomo_primary_node" field.
+func MihomoPrimaryNodeContainsFold(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldContainsFold(FieldMihomoPrimaryNode, v))
+}
+
+// MihomoGroupEQ applies the EQ predicate on the "mihomo_group" field.
+func MihomoGroupEQ(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEQ(FieldMihomoGroup, v))
+}
+
+// MihomoGroupNEQ applies the NEQ predicate on the "mihomo_group" field.
+func MihomoGroupNEQ(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNEQ(FieldMihomoGroup, v))
+}
+
+// MihomoGroupIn applies the In predicate on the "mihomo_group" field.
+func MihomoGroupIn(vs ...string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldIn(FieldMihomoGroup, vs...))
+}
+
+// MihomoGroupNotIn applies the NotIn predicate on the "mihomo_group" field.
+func MihomoGroupNotIn(vs ...string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotIn(FieldMihomoGroup, vs...))
+}
+
+// MihomoGroupGT applies the GT predicate on the "mihomo_group" field.
+func MihomoGroupGT(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGT(FieldMihomoGroup, v))
+}
+
+// MihomoGroupGTE applies the GTE predicate on the "mihomo_group" field.
+func MihomoGroupGTE(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldGTE(FieldMihomoGroup, v))
+}
+
+// MihomoGroupLT applies the LT predicate on the "mihomo_group" field.
+func MihomoGroupLT(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLT(FieldMihomoGroup, v))
+}
+
+// MihomoGroupLTE applies the LTE predicate on the "mihomo_group" field.
+func MihomoGroupLTE(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldLTE(FieldMihomoGroup, v))
+}
+
+// MihomoGroupContains applies the Contains predicate on the "mihomo_group" field.
+func MihomoGroupContains(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldContains(FieldMihomoGroup, v))
+}
+
+// MihomoGroupHasPrefix applies the HasPrefix predicate on the "mihomo_group" field.
+func MihomoGroupHasPrefix(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldHasPrefix(FieldMihomoGroup, v))
+}
+
+// MihomoGroupHasSuffix applies the HasSuffix predicate on the "mihomo_group" field.
+func MihomoGroupHasSuffix(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldHasSuffix(FieldMihomoGroup, v))
+}
+
+// MihomoGroupIsNil applies the IsNil predicate on the "mihomo_group" field.
+func MihomoGroupIsNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldIsNull(FieldMihomoGroup))
+}
+
+// MihomoGroupNotNil applies the NotNil predicate on the "mihomo_group" field.
+func MihomoGroupNotNil() predicate.Proxy {
+	return predicate.Proxy(sql.FieldNotNull(FieldMihomoGroup))
+}
+
+// MihomoGroupEqualFold applies the EqualFold predicate on the "mihomo_group" field.
+func MihomoGroupEqualFold(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldEqualFold(FieldMihomoGroup, v))
+}
+
+// MihomoGroupContainsFold applies the ContainsFold predicate on the "mihomo_group" field.
+func MihomoGroupContainsFold(v string) predicate.Proxy {
+	return predicate.Proxy(sql.FieldContainsFold(FieldMihomoGroup, v))
 }
 
 // HasAccounts applies the HasEdge predicate on the "accounts" edge.

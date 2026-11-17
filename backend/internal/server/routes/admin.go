@@ -68,6 +68,7 @@ func RegisterAdminRoutes(
 
 		// 代理管理
 		registerProxyRoutes(admin, h, stepUpAuth)
+		registerProxyTestTaskRoutes(admin, h)
 
 		// 卡密管理
 		registerRedeemCodeRoutes(admin, h)
@@ -745,6 +746,16 @@ func registerScheduledTestRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 	// Nested under accounts
 	admin.GET("/accounts/:id/scheduled-test-plans", h.Admin.ScheduledTest.ListByAccount)
+}
+
+func registerProxyTestTaskRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	tasks := admin.Group("/proxy-test-tasks")
+	tasks.GET("", h.Admin.ProxyTestTask.List)
+	tasks.POST("", h.Admin.ProxyTestTask.Create)
+	tasks.PUT("/:id", h.Admin.ProxyTestTask.Update)
+	tasks.DELETE("/:id", h.Admin.ProxyTestTask.Delete)
+	tasks.POST("/:id/run", h.Admin.ProxyTestTask.Run)
+	tasks.POST("/:id/test-email", h.Admin.ProxyTestTask.SendTestEmail)
 }
 
 func registerErrorPassthroughRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

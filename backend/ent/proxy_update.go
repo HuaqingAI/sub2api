@@ -247,6 +247,73 @@ func (_u *ProxyUpdate) AddExpiryWarnDays(v int) *ProxyUpdate {
 	return _u
 }
 
+// SetNodeTestPort sets the "node_test_port" field.
+func (_u *ProxyUpdate) SetNodeTestPort(v int) *ProxyUpdate {
+	_u.mutation.ResetNodeTestPort()
+	_u.mutation.SetNodeTestPort(v)
+	return _u
+}
+
+// SetNillableNodeTestPort sets the "node_test_port" field if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableNodeTestPort(v *int) *ProxyUpdate {
+	if v != nil {
+		_u.SetNodeTestPort(*v)
+	}
+	return _u
+}
+
+// AddNodeTestPort adds value to the "node_test_port" field.
+func (_u *ProxyUpdate) AddNodeTestPort(v int) *ProxyUpdate {
+	_u.mutation.AddNodeTestPort(v)
+	return _u
+}
+
+// ClearNodeTestPort clears the value of the "node_test_port" field.
+func (_u *ProxyUpdate) ClearNodeTestPort() *ProxyUpdate {
+	_u.mutation.ClearNodeTestPort()
+	return _u
+}
+
+// SetMihomoPrimaryNode sets the "mihomo_primary_node" field.
+func (_u *ProxyUpdate) SetMihomoPrimaryNode(v string) *ProxyUpdate {
+	_u.mutation.SetMihomoPrimaryNode(v)
+	return _u
+}
+
+// SetNillableMihomoPrimaryNode sets the "mihomo_primary_node" field if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableMihomoPrimaryNode(v *string) *ProxyUpdate {
+	if v != nil {
+		_u.SetMihomoPrimaryNode(*v)
+	}
+	return _u
+}
+
+// ClearMihomoPrimaryNode clears the value of the "mihomo_primary_node" field.
+func (_u *ProxyUpdate) ClearMihomoPrimaryNode() *ProxyUpdate {
+	_u.mutation.ClearMihomoPrimaryNode()
+	return _u
+}
+
+// SetMihomoGroup sets the "mihomo_group" field.
+func (_u *ProxyUpdate) SetMihomoGroup(v string) *ProxyUpdate {
+	_u.mutation.SetMihomoGroup(v)
+	return _u
+}
+
+// SetNillableMihomoGroup sets the "mihomo_group" field if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableMihomoGroup(v *string) *ProxyUpdate {
+	if v != nil {
+		_u.SetMihomoGroup(*v)
+	}
+	return _u
+}
+
+// ClearMihomoGroup clears the value of the "mihomo_group" field.
+func (_u *ProxyUpdate) ClearMihomoGroup() *ProxyUpdate {
+	_u.mutation.ClearMihomoGroup()
+	return _u
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_u *ProxyUpdate) AddAccountIDs(ids ...int64) *ProxyUpdate {
 	_u.mutation.AddAccountIDs(ids...)
@@ -414,6 +481,16 @@ func (_u *ProxyUpdate) check() error {
 			return &ValidationError{Name: "fallback_mode", err: fmt.Errorf(`ent: validator failed for field "Proxy.fallback_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MihomoPrimaryNode(); ok {
+		if err := proxy.MihomoPrimaryNodeValidator(v); err != nil {
+			return &ValidationError{Name: "mihomo_primary_node", err: fmt.Errorf(`ent: validator failed for field "Proxy.mihomo_primary_node": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.MihomoGroup(); ok {
+		if err := proxy.MihomoGroupValidator(v); err != nil {
+			return &ValidationError{Name: "mihomo_group", err: fmt.Errorf(`ent: validator failed for field "Proxy.mihomo_group": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -482,6 +559,27 @@ func (_u *ProxyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedExpiryWarnDays(); ok {
 		_spec.AddField(proxy.FieldExpiryWarnDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.NodeTestPort(); ok {
+		_spec.SetField(proxy.FieldNodeTestPort, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedNodeTestPort(); ok {
+		_spec.AddField(proxy.FieldNodeTestPort, field.TypeInt, value)
+	}
+	if _u.mutation.NodeTestPortCleared() {
+		_spec.ClearField(proxy.FieldNodeTestPort, field.TypeInt)
+	}
+	if value, ok := _u.mutation.MihomoPrimaryNode(); ok {
+		_spec.SetField(proxy.FieldMihomoPrimaryNode, field.TypeString, value)
+	}
+	if _u.mutation.MihomoPrimaryNodeCleared() {
+		_spec.ClearField(proxy.FieldMihomoPrimaryNode, field.TypeString)
+	}
+	if value, ok := _u.mutation.MihomoGroup(); ok {
+		_spec.SetField(proxy.FieldMihomoGroup, field.TypeString, value)
+	}
+	if _u.mutation.MihomoGroupCleared() {
+		_spec.ClearField(proxy.FieldMihomoGroup, field.TypeString)
 	}
 	if _u.mutation.AccountsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -840,6 +938,73 @@ func (_u *ProxyUpdateOne) AddExpiryWarnDays(v int) *ProxyUpdateOne {
 	return _u
 }
 
+// SetNodeTestPort sets the "node_test_port" field.
+func (_u *ProxyUpdateOne) SetNodeTestPort(v int) *ProxyUpdateOne {
+	_u.mutation.ResetNodeTestPort()
+	_u.mutation.SetNodeTestPort(v)
+	return _u
+}
+
+// SetNillableNodeTestPort sets the "node_test_port" field if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableNodeTestPort(v *int) *ProxyUpdateOne {
+	if v != nil {
+		_u.SetNodeTestPort(*v)
+	}
+	return _u
+}
+
+// AddNodeTestPort adds value to the "node_test_port" field.
+func (_u *ProxyUpdateOne) AddNodeTestPort(v int) *ProxyUpdateOne {
+	_u.mutation.AddNodeTestPort(v)
+	return _u
+}
+
+// ClearNodeTestPort clears the value of the "node_test_port" field.
+func (_u *ProxyUpdateOne) ClearNodeTestPort() *ProxyUpdateOne {
+	_u.mutation.ClearNodeTestPort()
+	return _u
+}
+
+// SetMihomoPrimaryNode sets the "mihomo_primary_node" field.
+func (_u *ProxyUpdateOne) SetMihomoPrimaryNode(v string) *ProxyUpdateOne {
+	_u.mutation.SetMihomoPrimaryNode(v)
+	return _u
+}
+
+// SetNillableMihomoPrimaryNode sets the "mihomo_primary_node" field if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableMihomoPrimaryNode(v *string) *ProxyUpdateOne {
+	if v != nil {
+		_u.SetMihomoPrimaryNode(*v)
+	}
+	return _u
+}
+
+// ClearMihomoPrimaryNode clears the value of the "mihomo_primary_node" field.
+func (_u *ProxyUpdateOne) ClearMihomoPrimaryNode() *ProxyUpdateOne {
+	_u.mutation.ClearMihomoPrimaryNode()
+	return _u
+}
+
+// SetMihomoGroup sets the "mihomo_group" field.
+func (_u *ProxyUpdateOne) SetMihomoGroup(v string) *ProxyUpdateOne {
+	_u.mutation.SetMihomoGroup(v)
+	return _u
+}
+
+// SetNillableMihomoGroup sets the "mihomo_group" field if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableMihomoGroup(v *string) *ProxyUpdateOne {
+	if v != nil {
+		_u.SetMihomoGroup(*v)
+	}
+	return _u
+}
+
+// ClearMihomoGroup clears the value of the "mihomo_group" field.
+func (_u *ProxyUpdateOne) ClearMihomoGroup() *ProxyUpdateOne {
+	_u.mutation.ClearMihomoGroup()
+	return _u
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by IDs.
 func (_u *ProxyUpdateOne) AddAccountIDs(ids ...int64) *ProxyUpdateOne {
 	_u.mutation.AddAccountIDs(ids...)
@@ -1020,6 +1185,16 @@ func (_u *ProxyUpdateOne) check() error {
 			return &ValidationError{Name: "fallback_mode", err: fmt.Errorf(`ent: validator failed for field "Proxy.fallback_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.MihomoPrimaryNode(); ok {
+		if err := proxy.MihomoPrimaryNodeValidator(v); err != nil {
+			return &ValidationError{Name: "mihomo_primary_node", err: fmt.Errorf(`ent: validator failed for field "Proxy.mihomo_primary_node": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.MihomoGroup(); ok {
+		if err := proxy.MihomoGroupValidator(v); err != nil {
+			return &ValidationError{Name: "mihomo_group", err: fmt.Errorf(`ent: validator failed for field "Proxy.mihomo_group": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1105,6 +1280,27 @@ func (_u *ProxyUpdateOne) sqlSave(ctx context.Context) (_node *Proxy, err error)
 	}
 	if value, ok := _u.mutation.AddedExpiryWarnDays(); ok {
 		_spec.AddField(proxy.FieldExpiryWarnDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.NodeTestPort(); ok {
+		_spec.SetField(proxy.FieldNodeTestPort, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedNodeTestPort(); ok {
+		_spec.AddField(proxy.FieldNodeTestPort, field.TypeInt, value)
+	}
+	if _u.mutation.NodeTestPortCleared() {
+		_spec.ClearField(proxy.FieldNodeTestPort, field.TypeInt)
+	}
+	if value, ok := _u.mutation.MihomoPrimaryNode(); ok {
+		_spec.SetField(proxy.FieldMihomoPrimaryNode, field.TypeString, value)
+	}
+	if _u.mutation.MihomoPrimaryNodeCleared() {
+		_spec.ClearField(proxy.FieldMihomoPrimaryNode, field.TypeString)
+	}
+	if value, ok := _u.mutation.MihomoGroup(); ok {
+		_spec.SetField(proxy.FieldMihomoGroup, field.TypeString, value)
+	}
+	if _u.mutation.MihomoGroupCleared() {
+		_spec.ClearField(proxy.FieldMihomoGroup, field.TypeString)
 	}
 	if _u.mutation.AccountsCleared() {
 		edge := &sqlgraph.EdgeSpec{

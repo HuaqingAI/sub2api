@@ -40,6 +40,9 @@ func (r *proxyRepository) Create(ctx context.Context, proxyIn *service.Proxy) er
 		SetHost(proxyIn.Host).
 		SetPort(proxyIn.Port).
 		SetStatus(proxyIn.Status).
+		SetNillableNodeTestPort(proxyIn.NodeTestPort).
+		SetMihomoPrimaryNode(proxyIn.MihomoPrimaryNode).
+		SetMihomoGroup(proxyIn.MihomoGroup).
 		SetFallbackMode(proxyIn.FallbackMode).
 		SetExpiryWarnDays(proxyIn.ExpiryWarnDays)
 	if proxyIn.Username != "" {
@@ -154,8 +157,15 @@ func updateProxyAndInvalidateProbeSnapshots(ctx context.Context, client *dbent.C
 		SetHost(proxyIn.Host).
 		SetPort(proxyIn.Port).
 		SetStatus(proxyIn.Status).
+		SetMihomoPrimaryNode(proxyIn.MihomoPrimaryNode).
+		SetMihomoGroup(proxyIn.MihomoGroup).
 		SetFallbackMode(proxyIn.FallbackMode).
 		SetExpiryWarnDays(proxyIn.ExpiryWarnDays)
+	if proxyIn.NodeTestPort == nil {
+		builder.ClearNodeTestPort()
+	} else {
+		builder.SetNodeTestPort(*proxyIn.NodeTestPort)
+	}
 	if proxyIn.Username != "" {
 		builder.SetUsername(proxyIn.Username)
 	} else {
@@ -589,18 +599,21 @@ func proxyEntityToService(m *dbent.Proxy) *service.Proxy {
 		return nil
 	}
 	out := &service.Proxy{
-		ID:             m.ID,
-		Name:           m.Name,
-		Protocol:       m.Protocol,
-		Host:           m.Host,
-		Port:           m.Port,
-		Status:         m.Status,
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
-		ExpiresAt:      m.ExpiresAt,
-		FallbackMode:   m.FallbackMode,
-		BackupProxyID:  m.BackupProxyID,
-		ExpiryWarnDays: m.ExpiryWarnDays,
+		ID:                m.ID,
+		Name:              m.Name,
+		Protocol:          m.Protocol,
+		Host:              m.Host,
+		Port:              m.Port,
+		Status:            m.Status,
+		CreatedAt:         m.CreatedAt,
+		UpdatedAt:         m.UpdatedAt,
+		ExpiresAt:         m.ExpiresAt,
+		FallbackMode:      m.FallbackMode,
+		BackupProxyID:     m.BackupProxyID,
+		ExpiryWarnDays:    m.ExpiryWarnDays,
+		NodeTestPort:      m.NodeTestPort,
+		MihomoPrimaryNode: m.MihomoPrimaryNode,
+		MihomoGroup:       m.MihomoGroup,
 	}
 	if m.Username != nil {
 		out.Username = *m.Username

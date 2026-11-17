@@ -43,6 +43,12 @@ const (
 	FieldBackupProxyID = "backup_proxy_id"
 	// FieldExpiryWarnDays holds the string denoting the expiry_warn_days field in the database.
 	FieldExpiryWarnDays = "expiry_warn_days"
+	// FieldNodeTestPort holds the string denoting the node_test_port field in the database.
+	FieldNodeTestPort = "node_test_port"
+	// FieldMihomoPrimaryNode holds the string denoting the mihomo_primary_node field in the database.
+	FieldMihomoPrimaryNode = "mihomo_primary_node"
+	// FieldMihomoGroup holds the string denoting the mihomo_group field in the database.
+	FieldMihomoGroup = "mihomo_group"
 	// EdgeAccounts holds the string denoting the accounts edge name in mutations.
 	EdgeAccounts = "accounts"
 	// EdgePrimaryProxies holds the string denoting the primary_proxies edge name in mutations.
@@ -85,6 +91,9 @@ var Columns = []string{
 	FieldFallbackMode,
 	FieldBackupProxyID,
 	FieldExpiryWarnDays,
+	FieldNodeTestPort,
+	FieldMihomoPrimaryNode,
+	FieldMihomoGroup,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -131,6 +140,10 @@ var (
 	FallbackModeValidator func(string) error
 	// DefaultExpiryWarnDays holds the default value on creation for the "expiry_warn_days" field.
 	DefaultExpiryWarnDays int
+	// MihomoPrimaryNodeValidator is a validator for the "mihomo_primary_node" field. It is called by the builders before save.
+	MihomoPrimaryNodeValidator func(string) error
+	// MihomoGroupValidator is a validator for the "mihomo_group" field. It is called by the builders before save.
+	MihomoGroupValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Proxy queries.
@@ -209,6 +222,21 @@ func ByBackupProxyID(opts ...sql.OrderTermOption) OrderOption {
 // ByExpiryWarnDays orders the results by the expiry_warn_days field.
 func ByExpiryWarnDays(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldExpiryWarnDays, opts...).ToFunc()
+}
+
+// ByNodeTestPort orders the results by the node_test_port field.
+func ByNodeTestPort(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNodeTestPort, opts...).ToFunc()
+}
+
+// ByMihomoPrimaryNode orders the results by the mihomo_primary_node field.
+func ByMihomoPrimaryNode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMihomoPrimaryNode, opts...).ToFunc()
+}
+
+// ByMihomoGroup orders the results by the mihomo_group field.
+func ByMihomoGroup(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMihomoGroup, opts...).ToFunc()
 }
 
 // ByAccountsCount orders the results by accounts count.

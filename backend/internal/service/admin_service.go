@@ -538,34 +538,41 @@ type BulkUpdateAccountsResult struct {
 }
 
 type CreateProxyInput struct {
-	Name           string
-	Protocol       string
-	Host           string
-	Port           int
-	Username       string
-	Password       string
-	ExpiresAt      *time.Time
-	FallbackMode   string
-	BackupProxyID  *int64
-	ExpiryWarnDays int
+	NodeTestPort      *int
+	MihomoPrimaryNode string
+	MihomoGroup       string
+	Name              string
+	Protocol          string
+	Host              string
+	Port              int
+	Username          string
+	Password          string
+	ExpiresAt         *time.Time
+	FallbackMode      string
+	BackupProxyID     *int64
+	ExpiryWarnDays    int
 }
 
 // UpdateProxyInput preserves omitted expiry/backup values; Clear flags explicitly
 // remove them. A nil ExpiryWarnDays preserves the current warning period.
 type UpdateProxyInput struct {
-	Name           string
-	Protocol       string
-	Host           string
-	Port           int
-	Username       *string
-	Password       *string
-	Status         string
-	ExpiresAt      *time.Time
-	ClearExpiresAt bool
-	FallbackMode   string
-	BackupProxyID  *int64
-	ClearBackupID  bool
-	ExpiryWarnDays *int
+	NodeTestPort      *int
+	ClearNodeTest     bool
+	MihomoPrimaryNode *string
+	MihomoGroup       *string
+	Name              string
+	Protocol          string
+	Host              string
+	Port              int
+	Username          *string
+	Password          *string
+	Status            string
+	ExpiresAt         *time.Time
+	ClearExpiresAt    bool
+	FallbackMode      string
+	BackupProxyID     *int64
+	ClearBackupID     bool
+	ExpiryWarnDays    *int
 }
 
 type GenerateRedeemCodesInput struct {
@@ -589,14 +596,28 @@ type ProxyBatchDeleteSkipped struct {
 
 // ProxyTestResult represents the result of testing a proxy
 type ProxyTestResult struct {
-	Success     bool   `json:"success"`
-	Message     string `json:"message"`
-	LatencyMs   int64  `json:"latency_ms,omitempty"`
-	IPAddress   string `json:"ip_address,omitempty"`
-	City        string `json:"city,omitempty"`
-	Region      string `json:"region,omitempty"`
-	Country     string `json:"country,omitempty"`
-	CountryCode string `json:"country_code,omitempty"`
+	NodeStatus         string     `json:"node_status,omitempty"`
+	NodeCheckedAt      *time.Time `json:"node_checked_at,omitempty"`
+	BusinessStatus     string     `json:"business_status,omitempty"`
+	BusinessLatencyMs  *int64     `json:"business_latency_ms,omitempty"`
+	BusinessCheckedAt  *time.Time `json:"business_checked_at,omitempty"`
+	PreferredNode      string     `json:"preferred_node,omitempty"`
+	IsBackup           bool       `json:"is_backup"`
+	RouteStatus        string     `json:"route_status,omitempty"`
+	RouteCheckedAt     *time.Time `json:"route_checked_at,omitempty"`
+	RouteError         string     `json:"route_error,omitempty"`
+	RouteFixed         bool       `json:"route_fixed"`
+	SampleID           string     `json:"sample_id,omitempty"`
+	SampledPod         string     `json:"sampled_pod,omitempty"`
+	ProbeConfigVersion string     `json:"probe_config_version,omitempty"`
+	Success            bool       `json:"success"`
+	Message            string     `json:"message"`
+	LatencyMs          int64      `json:"latency_ms,omitempty"`
+	IPAddress          string     `json:"ip_address,omitempty"`
+	City               string     `json:"city,omitempty"`
+	Region             string     `json:"region,omitempty"`
+	Country            string     `json:"country,omitempty"`
+	CountryCode        string     `json:"country_code,omitempty"`
 }
 
 type ProxyQualityCheckResult struct {
@@ -715,6 +736,7 @@ type adminServiceImpl struct {
 	billingCacheService  *BillingCacheService
 	proxyProber          ProxyExitInfoProber
 	proxyLatencyCache    ProxyLatencyCache
+	proxyTaskCoordinator ProxyTaskConfigCoordinator
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	entClient            *dbent.Client // 用于开启数据库事务
 	settingService       *SettingService

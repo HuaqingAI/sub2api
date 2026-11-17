@@ -64,6 +64,12 @@ func (Proxy) Fields() []ent.Field {
 		field.Int("expiry_warn_days").
 			Default(7).
 			Comment("Days before expiry to flag as expiring-soon (per proxy)."),
+		field.Int("node_test_port").Optional().Nillable().
+			Comment("Loopback SOCKS port pinned to the original Mihomo node."),
+		field.String("mihomo_primary_node").MaxLen(100).Optional().
+			Comment("Original node used by this business entry."),
+		field.String("mihomo_group").MaxLen(100).Optional().
+			Comment("Independent fallback group used by this business entry."),
 	}
 }
 

@@ -121,6 +121,7 @@ func provideCleanup(
 	grokOAuth *service.GrokOAuthService,
 	openAIGateway *service.OpenAIGatewayService,
 	scheduledTestRunner *service.ScheduledTestRunnerService,
+	proxyTestTaskRunner *service.ProxyTestTaskRunnerService,
 	backupSvc *service.BackupService,
 	paymentOrderExpiry *service.PaymentOrderExpiryService,
 	channelMonitorRunner *service.ChannelMonitorRunner,
@@ -363,6 +364,10 @@ func provideCleanup(
 				if scheduledTestRunner != nil {
 					scheduledTestRunner.Stop()
 				}
+				return nil
+			}},
+			{"ProxyTestTaskRunnerService", func() error {
+				proxyTestTaskRunner.Stop()
 				return nil
 			}},
 			{"BackupService", func() error {

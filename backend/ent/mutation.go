@@ -37579,6 +37579,10 @@ type ProxyMutation struct {
 	fallback_mode          *string
 	expiry_warn_days       *int
 	addexpiry_warn_days    *int
+	node_test_port         *int
+	addnode_test_port      *int
+	mihomo_primary_node    *string
+	mihomo_group           *string
 	clearedFields          map[string]struct{}
 	accounts               map[int64]struct{}
 	removedaccounts        map[int64]struct{}
@@ -38300,6 +38304,174 @@ func (m *ProxyMutation) ResetExpiryWarnDays() {
 	m.addexpiry_warn_days = nil
 }
 
+// SetNodeTestPort sets the "node_test_port" field.
+func (m *ProxyMutation) SetNodeTestPort(i int) {
+	m.node_test_port = &i
+	m.addnode_test_port = nil
+}
+
+// NodeTestPort returns the value of the "node_test_port" field in the mutation.
+func (m *ProxyMutation) NodeTestPort() (r int, exists bool) {
+	v := m.node_test_port
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNodeTestPort returns the old "node_test_port" field's value of the Proxy entity.
+// If the Proxy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProxyMutation) OldNodeTestPort(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNodeTestPort is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNodeTestPort requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNodeTestPort: %w", err)
+	}
+	return oldValue.NodeTestPort, nil
+}
+
+// AddNodeTestPort adds i to the "node_test_port" field.
+func (m *ProxyMutation) AddNodeTestPort(i int) {
+	if m.addnode_test_port != nil {
+		*m.addnode_test_port += i
+	} else {
+		m.addnode_test_port = &i
+	}
+}
+
+// AddedNodeTestPort returns the value that was added to the "node_test_port" field in this mutation.
+func (m *ProxyMutation) AddedNodeTestPort() (r int, exists bool) {
+	v := m.addnode_test_port
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearNodeTestPort clears the value of the "node_test_port" field.
+func (m *ProxyMutation) ClearNodeTestPort() {
+	m.node_test_port = nil
+	m.addnode_test_port = nil
+	m.clearedFields[proxy.FieldNodeTestPort] = struct{}{}
+}
+
+// NodeTestPortCleared returns if the "node_test_port" field was cleared in this mutation.
+func (m *ProxyMutation) NodeTestPortCleared() bool {
+	_, ok := m.clearedFields[proxy.FieldNodeTestPort]
+	return ok
+}
+
+// ResetNodeTestPort resets all changes to the "node_test_port" field.
+func (m *ProxyMutation) ResetNodeTestPort() {
+	m.node_test_port = nil
+	m.addnode_test_port = nil
+	delete(m.clearedFields, proxy.FieldNodeTestPort)
+}
+
+// SetMihomoPrimaryNode sets the "mihomo_primary_node" field.
+func (m *ProxyMutation) SetMihomoPrimaryNode(s string) {
+	m.mihomo_primary_node = &s
+}
+
+// MihomoPrimaryNode returns the value of the "mihomo_primary_node" field in the mutation.
+func (m *ProxyMutation) MihomoPrimaryNode() (r string, exists bool) {
+	v := m.mihomo_primary_node
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMihomoPrimaryNode returns the old "mihomo_primary_node" field's value of the Proxy entity.
+// If the Proxy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProxyMutation) OldMihomoPrimaryNode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMihomoPrimaryNode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMihomoPrimaryNode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMihomoPrimaryNode: %w", err)
+	}
+	return oldValue.MihomoPrimaryNode, nil
+}
+
+// ClearMihomoPrimaryNode clears the value of the "mihomo_primary_node" field.
+func (m *ProxyMutation) ClearMihomoPrimaryNode() {
+	m.mihomo_primary_node = nil
+	m.clearedFields[proxy.FieldMihomoPrimaryNode] = struct{}{}
+}
+
+// MihomoPrimaryNodeCleared returns if the "mihomo_primary_node" field was cleared in this mutation.
+func (m *ProxyMutation) MihomoPrimaryNodeCleared() bool {
+	_, ok := m.clearedFields[proxy.FieldMihomoPrimaryNode]
+	return ok
+}
+
+// ResetMihomoPrimaryNode resets all changes to the "mihomo_primary_node" field.
+func (m *ProxyMutation) ResetMihomoPrimaryNode() {
+	m.mihomo_primary_node = nil
+	delete(m.clearedFields, proxy.FieldMihomoPrimaryNode)
+}
+
+// SetMihomoGroup sets the "mihomo_group" field.
+func (m *ProxyMutation) SetMihomoGroup(s string) {
+	m.mihomo_group = &s
+}
+
+// MihomoGroup returns the value of the "mihomo_group" field in the mutation.
+func (m *ProxyMutation) MihomoGroup() (r string, exists bool) {
+	v := m.mihomo_group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMihomoGroup returns the old "mihomo_group" field's value of the Proxy entity.
+// If the Proxy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProxyMutation) OldMihomoGroup(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMihomoGroup is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMihomoGroup requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMihomoGroup: %w", err)
+	}
+	return oldValue.MihomoGroup, nil
+}
+
+// ClearMihomoGroup clears the value of the "mihomo_group" field.
+func (m *ProxyMutation) ClearMihomoGroup() {
+	m.mihomo_group = nil
+	m.clearedFields[proxy.FieldMihomoGroup] = struct{}{}
+}
+
+// MihomoGroupCleared returns if the "mihomo_group" field was cleared in this mutation.
+func (m *ProxyMutation) MihomoGroupCleared() bool {
+	_, ok := m.clearedFields[proxy.FieldMihomoGroup]
+	return ok
+}
+
+// ResetMihomoGroup resets all changes to the "mihomo_group" field.
+func (m *ProxyMutation) ResetMihomoGroup() {
+	m.mihomo_group = nil
+	delete(m.clearedFields, proxy.FieldMihomoGroup)
+}
+
 // AddAccountIDs adds the "accounts" edge to the Account entity by ids.
 func (m *ProxyMutation) AddAccountIDs(ids ...int64) {
 	if m.accounts == nil {
@@ -38469,7 +38641,7 @@ func (m *ProxyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProxyMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 17)
 	if m.created_at != nil {
 		fields = append(fields, proxy.FieldCreatedAt)
 	}
@@ -38512,6 +38684,15 @@ func (m *ProxyMutation) Fields() []string {
 	if m.expiry_warn_days != nil {
 		fields = append(fields, proxy.FieldExpiryWarnDays)
 	}
+	if m.node_test_port != nil {
+		fields = append(fields, proxy.FieldNodeTestPort)
+	}
+	if m.mihomo_primary_node != nil {
+		fields = append(fields, proxy.FieldMihomoPrimaryNode)
+	}
+	if m.mihomo_group != nil {
+		fields = append(fields, proxy.FieldMihomoGroup)
+	}
 	return fields
 }
 
@@ -38548,6 +38729,12 @@ func (m *ProxyMutation) Field(name string) (ent.Value, bool) {
 		return m.BackupProxyID()
 	case proxy.FieldExpiryWarnDays:
 		return m.ExpiryWarnDays()
+	case proxy.FieldNodeTestPort:
+		return m.NodeTestPort()
+	case proxy.FieldMihomoPrimaryNode:
+		return m.MihomoPrimaryNode()
+	case proxy.FieldMihomoGroup:
+		return m.MihomoGroup()
 	}
 	return nil, false
 }
@@ -38585,6 +38772,12 @@ func (m *ProxyMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldBackupProxyID(ctx)
 	case proxy.FieldExpiryWarnDays:
 		return m.OldExpiryWarnDays(ctx)
+	case proxy.FieldNodeTestPort:
+		return m.OldNodeTestPort(ctx)
+	case proxy.FieldMihomoPrimaryNode:
+		return m.OldMihomoPrimaryNode(ctx)
+	case proxy.FieldMihomoGroup:
+		return m.OldMihomoGroup(ctx)
 	}
 	return nil, fmt.Errorf("unknown Proxy field %s", name)
 }
@@ -38692,6 +38885,27 @@ func (m *ProxyMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetExpiryWarnDays(v)
 		return nil
+	case proxy.FieldNodeTestPort:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNodeTestPort(v)
+		return nil
+	case proxy.FieldMihomoPrimaryNode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMihomoPrimaryNode(v)
+		return nil
+	case proxy.FieldMihomoGroup:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMihomoGroup(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Proxy field %s", name)
 }
@@ -38706,6 +38920,9 @@ func (m *ProxyMutation) AddedFields() []string {
 	if m.addexpiry_warn_days != nil {
 		fields = append(fields, proxy.FieldExpiryWarnDays)
 	}
+	if m.addnode_test_port != nil {
+		fields = append(fields, proxy.FieldNodeTestPort)
+	}
 	return fields
 }
 
@@ -38718,6 +38935,8 @@ func (m *ProxyMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedPort()
 	case proxy.FieldExpiryWarnDays:
 		return m.AddedExpiryWarnDays()
+	case proxy.FieldNodeTestPort:
+		return m.AddedNodeTestPort()
 	}
 	return nil, false
 }
@@ -38741,6 +38960,13 @@ func (m *ProxyMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddExpiryWarnDays(v)
 		return nil
+	case proxy.FieldNodeTestPort:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNodeTestPort(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Proxy numeric field %s", name)
 }
@@ -38763,6 +38989,15 @@ func (m *ProxyMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(proxy.FieldBackupProxyID) {
 		fields = append(fields, proxy.FieldBackupProxyID)
+	}
+	if m.FieldCleared(proxy.FieldNodeTestPort) {
+		fields = append(fields, proxy.FieldNodeTestPort)
+	}
+	if m.FieldCleared(proxy.FieldMihomoPrimaryNode) {
+		fields = append(fields, proxy.FieldMihomoPrimaryNode)
+	}
+	if m.FieldCleared(proxy.FieldMihomoGroup) {
+		fields = append(fields, proxy.FieldMihomoGroup)
 	}
 	return fields
 }
@@ -38792,6 +39027,15 @@ func (m *ProxyMutation) ClearField(name string) error {
 		return nil
 	case proxy.FieldBackupProxyID:
 		m.ClearBackupProxyID()
+		return nil
+	case proxy.FieldNodeTestPort:
+		m.ClearNodeTestPort()
+		return nil
+	case proxy.FieldMihomoPrimaryNode:
+		m.ClearMihomoPrimaryNode()
+		return nil
+	case proxy.FieldMihomoGroup:
+		m.ClearMihomoGroup()
 		return nil
 	}
 	return fmt.Errorf("unknown Proxy nullable field %s", name)
@@ -38842,6 +39086,15 @@ func (m *ProxyMutation) ResetField(name string) error {
 		return nil
 	case proxy.FieldExpiryWarnDays:
 		m.ResetExpiryWarnDays()
+		return nil
+	case proxy.FieldNodeTestPort:
+		m.ResetNodeTestPort()
+		return nil
+	case proxy.FieldMihomoPrimaryNode:
+		m.ResetMihomoPrimaryNode()
+		return nil
+	case proxy.FieldMihomoGroup:
+		m.ResetMihomoGroup()
 		return nil
 	}
 	return fmt.Errorf("unknown Proxy field %s", name)

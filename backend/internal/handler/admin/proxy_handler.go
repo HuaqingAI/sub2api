@@ -27,31 +27,37 @@ func NewProxyHandler(adminService service.AdminService) *ProxyHandler {
 
 // CreateProxyRequest represents create proxy request
 type CreateProxyRequest struct {
-	Name           string `json:"name" binding:"required"`
-	Protocol       string `json:"protocol" binding:"required,oneof=http https socks5 socks5h"`
-	Host           string `json:"host" binding:"required"`
-	Port           int    `json:"port" binding:"required,min=1,max=65535"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	ExpiresAt      *int64 `json:"expires_at"`
-	FallbackMode   string `json:"fallback_mode" binding:"omitempty,oneof=none proxy direct"`
-	BackupProxyID  *int64 `json:"backup_proxy_id"`
-	ExpiryWarnDays int    `json:"expiry_warn_days" binding:"omitempty,min=0"`
+	NodeTestPort      *int   `json:"node_test_port" binding:"omitempty,min=1,max=65535"`
+	MihomoPrimaryNode string `json:"mihomo_primary_node"`
+	MihomoGroup       string `json:"mihomo_group"`
+	Name              string `json:"name" binding:"required"`
+	Protocol          string `json:"protocol" binding:"required,oneof=http https socks5 socks5h"`
+	Host              string `json:"host" binding:"required"`
+	Port              int    `json:"port" binding:"required,min=1,max=65535"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	ExpiresAt         *int64 `json:"expires_at"`
+	FallbackMode      string `json:"fallback_mode" binding:"omitempty,oneof=none proxy direct"`
+	BackupProxyID     *int64 `json:"backup_proxy_id"`
+	ExpiryWarnDays    int    `json:"expiry_warn_days" binding:"omitempty,min=0"`
 }
 
 // UpdateProxyRequest represents update proxy request
 type UpdateProxyRequest struct {
-	Name           string                 `json:"name"`
-	Protocol       string                 `json:"protocol" binding:"omitempty,oneof=http https socks5 socks5h"`
-	Host           string                 `json:"host"`
-	Port           int                    `json:"port" binding:"omitempty,min=1,max=65535"`
-	Username       *string                `json:"username"`
-	Password       *string                `json:"password"`
-	Status         string                 `json:"status" binding:"omitempty,oneof=active inactive"`
-	ExpiresAt      dto.NullableInt64Field `json:"expires_at"`
-	FallbackMode   string                 `json:"fallback_mode" binding:"omitempty,oneof=none proxy direct"`
-	BackupProxyID  dto.NullableInt64Field `json:"backup_proxy_id"`
-	ExpiryWarnDays *int                   `json:"expiry_warn_days" binding:"omitempty,min=0"`
+	NodeTestPort      dto.NullableInt64Field `json:"node_test_port"`
+	MihomoPrimaryNode *string                `json:"mihomo_primary_node"`
+	MihomoGroup       *string                `json:"mihomo_group"`
+	Name              string                 `json:"name"`
+	Protocol          string                 `json:"protocol" binding:"omitempty,oneof=http https socks5 socks5h"`
+	Host              string                 `json:"host"`
+	Port              int                    `json:"port" binding:"omitempty,min=1,max=65535"`
+	Username          *string                `json:"username"`
+	Password          *string                `json:"password"`
+	Status            string                 `json:"status" binding:"omitempty,oneof=active inactive"`
+	ExpiresAt         dto.NullableInt64Field `json:"expires_at"`
+	FallbackMode      string                 `json:"fallback_mode" binding:"omitempty,oneof=none proxy direct"`
+	BackupProxyID     dto.NullableInt64Field `json:"backup_proxy_id"`
+	ExpiryWarnDays    *int                   `json:"expiry_warn_days" binding:"omitempty,min=0"`
 }
 
 // List handles listing all proxies with pagination
@@ -158,16 +164,19 @@ func (h *ProxyHandler) Create(c *gin.Context) {
 			expiresAt = &t
 		}
 		proxy, err := h.adminService.CreateProxy(ctx, &service.CreateProxyInput{
-			Name:           strings.TrimSpace(req.Name),
-			Protocol:       strings.TrimSpace(req.Protocol),
-			Host:           strings.TrimSpace(req.Host),
-			Port:           req.Port,
-			Username:       strings.TrimSpace(req.Username),
-			Password:       strings.TrimSpace(req.Password),
-			ExpiresAt:      expiresAt,
-			FallbackMode:   strings.TrimSpace(req.FallbackMode),
-			BackupProxyID:  req.BackupProxyID,
-			ExpiryWarnDays: req.ExpiryWarnDays,
+			NodeTestPort:      req.NodeTestPort,
+			MihomoPrimaryNode: strings.TrimSpace(req.MihomoPrimaryNode),
+			MihomoGroup:       strings.TrimSpace(req.MihomoGroup),
+			Name:              strings.TrimSpace(req.Name),
+			Protocol:          strings.TrimSpace(req.Protocol),
+			Host:              strings.TrimSpace(req.Host),
+			Port:              req.Port,
+			Username:          strings.TrimSpace(req.Username),
+			Password:          strings.TrimSpace(req.Password),
+			ExpiresAt:         expiresAt,
+			FallbackMode:      strings.TrimSpace(req.FallbackMode),
+			BackupProxyID:     req.BackupProxyID,
+			ExpiryWarnDays:    req.ExpiryWarnDays,
 		})
 		if err != nil {
 			return nil, err
@@ -202,20 +211,39 @@ func (h *ProxyHandler) Update(c *gin.Context) {
 	if req.Password != nil {
 		*req.Password = strings.TrimSpace(*req.Password)
 	}
+	var nodeTestPort *int
+	if req.NodeTestPort.Value != nil {
+		if *req.NodeTestPort.Value < 1 || *req.NodeTestPort.Value > 65535 {
+			response.BadRequest(c, "node_test_port must be between 1 and 65535")
+			return
+		}
+		port := int(*req.NodeTestPort.Value)
+		nodeTestPort = &port
+	}
+	if req.MihomoPrimaryNode != nil {
+		*req.MihomoPrimaryNode = strings.TrimSpace(*req.MihomoPrimaryNode)
+	}
+	if req.MihomoGroup != nil {
+		*req.MihomoGroup = strings.TrimSpace(*req.MihomoGroup)
+	}
 	proxy, err := h.adminService.UpdateProxy(c.Request.Context(), proxyID, &service.UpdateProxyInput{
-		Name:           strings.TrimSpace(req.Name),
-		Protocol:       strings.TrimSpace(req.Protocol),
-		Host:           strings.TrimSpace(req.Host),
-		Port:           req.Port,
-		Username:       req.Username,
-		Password:       req.Password,
-		Status:         strings.TrimSpace(req.Status),
-		ExpiresAt:      expiresAt,
-		ClearExpiresAt: req.ExpiresAt.Set && expiresAt == nil,
-		FallbackMode:   strings.TrimSpace(req.FallbackMode),
-		BackupProxyID:  req.BackupProxyID.Value,
-		ClearBackupID:  req.BackupProxyID.Set && req.BackupProxyID.Value == nil,
-		ExpiryWarnDays: req.ExpiryWarnDays,
+		NodeTestPort:      nodeTestPort,
+		ClearNodeTest:     req.NodeTestPort.Set && req.NodeTestPort.Value == nil,
+		MihomoPrimaryNode: req.MihomoPrimaryNode,
+		MihomoGroup:       req.MihomoGroup,
+		Name:              strings.TrimSpace(req.Name),
+		Protocol:          strings.TrimSpace(req.Protocol),
+		Host:              strings.TrimSpace(req.Host),
+		Port:              req.Port,
+		Username:          req.Username,
+		Password:          req.Password,
+		Status:            strings.TrimSpace(req.Status),
+		ExpiresAt:         expiresAt,
+		ClearExpiresAt:    req.ExpiresAt.Set && expiresAt == nil,
+		FallbackMode:      strings.TrimSpace(req.FallbackMode),
+		BackupProxyID:     req.BackupProxyID.Value,
+		ClearBackupID:     req.BackupProxyID.Set && req.BackupProxyID.Value == nil,
+		ExpiryWarnDays:    req.ExpiryWarnDays,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
