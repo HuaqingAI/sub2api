@@ -212,7 +212,7 @@ function targetSnapshot(target: ProxyTestTaskTarget) {
   const proxy = availableProxies.value.find(item => item.id === target.proxy_id)
   return {
     mihomo_primary_node: proxy?.mihomo_primary_node || target.mihomo_primary_node,
-    mihomo_group: proxy?.mihomo_group || (target.mihomo_primary_node ? `${target.mihomo_primary_node}-fallback` : ''),
+    mihomo_group: proxy?.mihomo_group || '',
     node_status: target.last_node_status,
     node_checked_at: target.last_checked_at,
     latency_message: target.last_error,

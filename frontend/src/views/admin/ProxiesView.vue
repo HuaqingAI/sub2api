@@ -529,7 +529,7 @@
           />
           <input v-model="createForm.expires_at" type="date" max="9999-12-31" class="input" />
         </div>
-        <ProxyNodeTestConfig v-model="createForm.mihomo_primary_node" />
+        <ProxyNodeTestConfig v-model="createForm.node_test_config" />
         <div>
           <label class="input-label">{{ t('admin.proxies.fallbackMode') }}</label>
           <Select v-model="createForm.fallback_mode" :options="[
@@ -763,7 +763,7 @@
           />
           <input v-model="editForm.expires_at" type="date" max="9999-12-31" class="input" />
         </div>
-        <ProxyNodeTestConfig v-model="editForm.mihomo_primary_node" />
+        <ProxyNodeTestConfig v-model="editForm.node_test_config" />
         <div>
           <label class="input-label">{{ t('admin.proxies.fallbackMode') }}</label>
           <Select v-model="editForm.fallback_mode" :options="[
@@ -1005,7 +1005,7 @@ import ImportDataModal from '@/components/admin/proxy/ImportDataModal.vue'
 import ProxyHealthCell from '@/components/admin/proxy/ProxyHealthCell.vue'
 import ProxyNodeTestConfig from '@/components/admin/proxy/ProxyNodeTestConfig.vue'
 import ProxyTestTasksPanel from '@/components/admin/proxy/ProxyTestTasksPanel.vue'
-import { mihomoNodeConfig } from '@/utils/proxyMonitoring'
+import { createProxyNodeTestForm, isValidProxyNodeTestForm, proxyNodeTestConfig } from '@/utils/proxyMonitoring'
 import Select from '@/components/common/Select.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -1166,7 +1166,7 @@ const createForm = reactive({
   fallback_mode: 'none' as 'none' | 'proxy' | 'direct',
   backup_proxy_id: null as number | null,
   expiry_warn_days: 7 as number,
-  mihomo_primary_node: '',
+  node_test_config: createProxyNodeTestForm(),
 })
 
 const editForm = reactive({
@@ -1181,7 +1181,7 @@ const editForm = reactive({
   fallback_mode: 'none' as 'none' | 'proxy' | 'direct',
   backup_proxy_id: null as number | null,
   expiry_warn_days: 7 as number,
-  mihomo_primary_node: '',
+  node_test_config: createProxyNodeTestForm(),
 })
 
 const allProxiesForBackup = ref<Proxy[]>([])
@@ -1302,7 +1302,7 @@ const closeCreateModal = () => {
   createForm.fallback_mode = 'none'
   createForm.backup_proxy_id = null
   createForm.expiry_warn_days = 7
-  createForm.mihomo_primary_node = ''
+  createForm.node_test_config = createProxyNodeTestForm()
   createPasswordVisible.value = false
   batchInput.value = ''
   batchParseResult.total = 0
@@ -1426,6 +1426,10 @@ const handleCreateProxy = async () => {
     appStore.showError(t('admin.proxies.portInvalid'))
     return
   }
+  if (!isValidProxyNodeTestForm(createForm.node_test_config, createForm.port)) {
+    appStore.showError(t('admin.proxyMonitoring.invalidConfig'))
+    return
+  }
   submitting.value = true
   try {
     await adminAPI.proxies.create({
@@ -1439,7 +1443,7 @@ const handleCreateProxy = async () => {
       fallback_mode: createForm.fallback_mode,
       backup_proxy_id: createForm.fallback_mode === 'proxy' ? createForm.backup_proxy_id : null,
       expiry_warn_days: createForm.expiry_warn_days,
-      ...mihomoNodeConfig(createForm.mihomo_primary_node),
+      ...proxyNodeTestConfig(createForm.node_test_config),
     })
     appStore.showSuccess(t('admin.proxies.proxyCreated'))
     closeCreateModal()
@@ -1465,7 +1469,7 @@ const handleEdit = (proxy: Proxy) => {
   editForm.fallback_mode = proxy.fallback_mode || 'none'
   editForm.backup_proxy_id = proxy.backup_proxy_id ?? null
   editForm.expiry_warn_days = proxy.expiry_warn_days ?? 7
-  editForm.mihomo_primary_node = proxy.mihomo_primary_node || ''
+  editForm.node_test_config = createProxyNodeTestForm(proxy)
   editPasswordVisible.value = false
   editPasswordDirty.value = false
   showEditModal.value = true
@@ -1492,6 +1496,10 @@ const handleUpdateProxy = async () => {
     appStore.showError(t('admin.proxies.portInvalid'))
     return
   }
+  if (!isValidProxyNodeTestForm(editForm.node_test_config, editForm.port)) {
+    appStore.showError(t('admin.proxyMonitoring.invalidConfig'))
+    return
+  }
 
   submitting.value = true
   try {
@@ -1506,7 +1514,7 @@ const handleUpdateProxy = async () => {
       fallback_mode: editForm.fallback_mode,
       backup_proxy_id: editForm.fallback_mode === 'proxy' ? editForm.backup_proxy_id : null,
       expiry_warn_days: editForm.expiry_warn_days,
-      ...mihomoNodeConfig(editForm.mihomo_primary_node),
+      ...proxyNodeTestConfig(editForm.node_test_config),
     }
 
     // Only include password if user actually modified the field

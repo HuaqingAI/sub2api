@@ -48,6 +48,13 @@ describe('original node and fallback health display', () => {
     expect(cell('route', values).get('span.badge').text()).toBe('us1')
     expect(cell('business', values).get('span.badge').text()).toBe('不可用')
   })
+  it('can display a sampled task route without inventing a fallback group name', () => {
+    expect(cell('route', { ...snapshot, mihomo_primary_node: '', mihomo_group: '' }).text()).toContain('us2（备用）')
+  })
+  it('keeps a configured task without a proxy record or sample as not yet tested', () => {
+    expect(cell('route', { mihomo_primary_node: '自定义美国节点' }).get('span.badge').text()).toBe('未检测')
+    expect(cell('route', { ...snapshot, route_status: 'not_applicable' }).get('span.badge').text()).toBe('不适用')
+  })
   it('shows unknown when no probe ran and not applicable for an ordinary proxy route', () => {
     expect(cell('node', {}).get('span.badge').text()).toBe('未检测')
     expect(cell('node', { node_status: 'unknown', sample_id: 'invalid-config' }).get('span.badge').text()).toBe('未知')

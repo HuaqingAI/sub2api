@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -74,8 +75,8 @@ func (s *adminServiceImpl) CreateProxy(ctx context.Context, input *CreateProxyIn
 
 	proxy := &Proxy{
 		NodeTestPort:      input.NodeTestPort,
-		MihomoPrimaryNode: input.MihomoPrimaryNode,
-		MihomoGroup:       input.MihomoGroup,
+		MihomoPrimaryNode: strings.TrimSpace(input.MihomoPrimaryNode),
+		MihomoGroup:       strings.TrimSpace(input.MihomoGroup),
 		Name:              input.Name,
 		Protocol:          input.Protocol,
 		Host:              input.Host,
@@ -165,10 +166,10 @@ func (s *adminServiceImpl) updateProxy(ctx context.Context, id int64, input *Upd
 			proxy.NodeTestPort = input.NodeTestPort
 		}
 		if input.MihomoPrimaryNode != nil {
-			proxy.MihomoPrimaryNode = *input.MihomoPrimaryNode
+			proxy.MihomoPrimaryNode = strings.TrimSpace(*input.MihomoPrimaryNode)
 		}
 		if input.MihomoGroup != nil {
-			proxy.MihomoGroup = *input.MihomoGroup
+			proxy.MihomoGroup = strings.TrimSpace(*input.MihomoGroup)
 		}
 	}
 	if err := ValidateProxyNodeTestConfig(proxy); err != nil {

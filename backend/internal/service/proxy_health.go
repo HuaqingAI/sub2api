@@ -43,8 +43,9 @@ func (p *Proxy) HasNodeTestConfig() bool {
 	return p.NodeTestPort != nil || p.MihomoPrimaryNode != "" || p.MihomoGroup != ""
 }
 
-// ValidateProxyNodeTestConfig only accepts the five fixed loopback bindings in
-// the production configuration. Ordinary proxies retain their existing path.
+// ValidateProxyNodeTestConfig accepts operator-configured loopback listeners.
+// The listener must pin the original node in Mihomo; route sampling separately
+// checks that the fallback group's first member is that node.
 func ValidateProxyNodeTestConfig(p *Proxy) error {
 	if p == nil {
 		return fmt.Errorf("proxy is required")
@@ -52,24 +53,23 @@ func ValidateProxyNodeTestConfig(p *Proxy) error {
 	if !p.HasNodeTestConfig() {
 		return nil
 	}
-	if p.NodeTestPort == nil || p.MihomoPrimaryNode == "" || p.MihomoGroup == "" {
+	primaryNode, group := strings.TrimSpace(p.MihomoPrimaryNode), strings.TrimSpace(p.MihomoGroup)
+	if p.NodeTestPort == nil || primaryNode == "" || group == "" {
 		return fmt.Errorf("node_test_port, mihomo_primary_node and mihomo_group must be configured together")
+	}
+	if len(primaryNode) > 100 || len(group) > 100 {
+		return fmt.Errorf("mihomo_primary_node and mihomo_group must each be at most 100 UTF-8 bytes")
+	}
+	if *p.NodeTestPort < 1 || *p.NodeTestPort > 65535 {
+		return fmt.Errorf("node_test_port must be between 1 and 65535")
+	}
+	if *p.NodeTestPort == p.Port {
+		return fmt.Errorf("node_test_port must differ from the business proxy port")
 	}
 	host := strings.Trim(p.Host, "[]")
 	ip := net.ParseIP(host)
 	if !strings.EqualFold(host, "localhost") && (ip == nil || !ip.IsLoopback()) {
 		return fmt.Errorf("Mihomo node testing requires a loopback business proxy")
-	}
-	bindings := map[string][3]int{
-		"us1": {17903, 7893, 7903}, "us2": {17905, 7895, 7905},
-		"us3": {17906, 7896, 7906}, "us4": {17907, 7897, 7907}, "us5": {17908, 7898, 7908},
-	}
-	binding, ok := bindings[p.MihomoPrimaryNode]
-	if !ok || *p.NodeTestPort != binding[0] || p.MihomoGroup != p.MihomoPrimaryNode+"-fallback" {
-		return fmt.Errorf("node test port, original node and fallback group do not match a supported US binding")
-	}
-	if p.Port != binding[1] && p.Port != binding[2] {
-		return fmt.Errorf("business port does not match the original US node")
 	}
 	return nil
 }

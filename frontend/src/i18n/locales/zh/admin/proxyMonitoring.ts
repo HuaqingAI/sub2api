@@ -21,7 +21,15 @@ export default {
     "expiredHelp": "检测结果已超过 15 分钟，请重新检测或检查定时任务。",
     "configTitle": "Mihomo 原节点检测",
     "normalProxy": "普通代理（使用原代理地址检测）",
-    "configHelp": "同 Pod 的 Mihomo 代理可选择原美国节点。测试连接和质量检测将固定走原节点，业务请求继续使用 fallback；选择普通代理可清除该配置。"
+    "mihomoProxy": "Mihomo（单独检测原节点）",
+    "primaryNode": "原节点名称",
+    "primaryNodePlaceholder": "例如 us6，与 Mihomo 中的节点名称一致",
+    "testPort": "原节点 SOCKS 检测端口",
+    "testPortPlaceholder": "例如 17909",
+    "fallbackGroup": "fallback 组名",
+    "fallbackGroupPlaceholder": "例如 us6-fallback",
+    "configHelp": "填写同 Pod 中 Mihomo 已配置的原节点名称、固定指向该节点的 SOCKS 检测端口和 fallback 组名；组内首个成员必须是该原节点。检测端口通过 127.0.0.1 连接，测试连接和质量检测固定走原节点，业务请求仍使用上方业务端口。此处不会修改 Mihomo 配置；选择普通代理并保存可清除检测配置。",
+    "invalidConfig": "请完整填写原节点名称和 fallback 组名，名称各不超过 100 字节（中文通常每字 3 字节）；检测端口须为 1～65535 的整数，且不同于业务端口。"
   },
   "proxyTestTasks": {
     "title": "定时检测任务",

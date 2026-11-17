@@ -29,7 +29,8 @@ const checkedAt = computed(() => props.kind === 'node' ? props.proxy.node_checke
 const expired = computed(() => Boolean(checkedAt.value) &&
   (!Number.isFinite(Date.parse(checkedAt.value!)) || props.now - Date.parse(checkedAt.value!) > 15 * 60_000))
 const notApplicable = computed(() => props.kind === 'route' &&
-  (props.proxy.route_status === 'not_applicable' || !props.proxy.mihomo_group))
+  (props.proxy.route_status === 'not_applicable' ||
+    (!props.proxy.mihomo_group && !props.proxy.mihomo_primary_node && props.proxy.node_test_port == null && !props.proxy.route_status)))
 const status = computed(() => {
   if (expired.value || !checkedAt.value) return 'unknown'
   if (props.kind === 'node') return props.proxy.node_status || 'unknown'

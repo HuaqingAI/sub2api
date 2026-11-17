@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -162,17 +164,98 @@ func TestNodeTestConfigValidationAndRawURL(t *testing.T) {
 	p.Username, p.Password = "business-user", "secret"
 	require.NoError(t, ValidateProxyNodeTestConfig(p))
 	require.Equal(t, "socks5h://127.0.0.1:17903", p.NodeTestURL())
-	p.MihomoGroup = "us2-fallback"
-	require.Error(t, ValidateProxyNodeTestConfig(p))
-	p = healthTestProxy()
-	p.Host = "remote.example"
-	require.Error(t, ValidateProxyNodeTestConfig(p))
-	p = healthTestProxy()
-	p.Port = 7905
-	require.Error(t, ValidateProxyNodeTestConfig(p))
+	// Names, groups and ports are independent operator-supplied values.
+	port := 28007
+	p = &Proxy{Protocol: "http", Host: "localhost", Port: 8123, NodeTestPort: &port,
+		MihomoPrimaryNode: "US 7 西部", MihomoGroup: "GPT exits"}
+	require.NoError(t, ValidateProxyNodeTestConfig(p))
+	require.Equal(t, "socks5h://127.0.0.1:28007", p.NodeTestURL())
 	p = &Proxy{Protocol: "https", Host: "example.com", Port: 443}
 	require.NoError(t, ValidateProxyNodeTestConfig(p))
 	require.Equal(t, p.URL(), p.NodeTestURL())
+}
+
+func TestNodeTestConfigRejectsInvalidCustomBindings(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*Proxy)
+	}{
+		{"missing port", func(p *Proxy) { p.NodeTestPort = nil }},
+		{"missing original node", func(p *Proxy) { p.MihomoPrimaryNode = "" }},
+		{"blank original node", func(p *Proxy) { p.MihomoPrimaryNode = " \t " }},
+		{"missing group", func(p *Proxy) { p.MihomoGroup = "" }},
+		{"blank group", func(p *Proxy) { p.MihomoGroup = " \n " }},
+		{"zero port", func(p *Proxy) { v := 0; p.NodeTestPort = &v }},
+		{"negative port", func(p *Proxy) { v := -1; p.NodeTestPort = &v }},
+		{"port too high", func(p *Proxy) { v := 65536; p.NodeTestPort = &v }},
+		{"business listener as node test", func(p *Proxy) { v := p.Port; p.NodeTestPort = &v }},
+		{"remote business proxy", func(p *Proxy) { p.Host = "remote.example" }},
+		{"long original node", func(p *Proxy) { p.MihomoPrimaryNode = strings.Repeat("a", 101) }},
+		{"long group in UTF-8 bytes", func(p *Proxy) { p.MihomoGroup = strings.Repeat("美", 34) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := healthTestProxy()
+			tc.mutate(p)
+			require.Error(t, ValidateProxyNodeTestConfig(p))
+		})
+	}
+	require.Error(t, ValidateProxyNodeTestConfig(nil))
+}
+
+func TestCustomNodeProbeKeepsOriginalFailureSeparateFromFallback(t *testing.T) {
+	port := 28007
+	p := &Proxy{Protocol: "socks5", Host: "127.0.0.1", Port: 8123, NodeTestPort: &port,
+		MihomoPrimaryNode: "US 7 西部", MihomoGroup: "GPT exits"}
+	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"proxies": map[string]any{
+			p.MihomoGroup: map[string]any{"type": "Fallback", "all": []string{p.MihomoPrimaryNode, "US 8 备用"}, "now": "US 8 备用"},
+		}}))
+	}))
+	defer controller.Close()
+	var requested []string
+	info := probeMihomoProxy(context.Background(), p, proxyHealthProbeOptions{
+		controllerURL: controller.URL, timeout: time.Second,
+		head: func(_ context.Context, proxyURL, _ string, _ time.Duration) (int64, error) {
+			requested = append(requested, proxyURL)
+			if proxyURL == p.NodeTestURL() {
+				return 0, errors.New("original node unavailable")
+			}
+			return 17, nil
+		},
+	})
+	require.Equal(t, []string{"socks5h://127.0.0.1:28007", "socks5://127.0.0.1:8123"}, requested)
+	require.Equal(t, ProxyHealthUnhealthy, info.NodeStatus)
+	require.False(t, info.Success)
+	require.Equal(t, ProxyHealthHealthy, info.BusinessStatus)
+	require.Equal(t, ProxyHealthHealthy, info.RouteStatus)
+	require.Equal(t, "US 8 备用", info.PreferredNode)
+	require.True(t, info.IsBackup)
+}
+
+func TestCustomNodeProbeWithMismatchedGroupOnlyMakesRouteUnknown(t *testing.T) {
+	port := 28008
+	p := &Proxy{Protocol: "socks5", Host: "127.0.0.1", Port: 8124, NodeTestPort: &port,
+		MihomoPrimaryNode: "us8", MihomoGroup: "GPT custom pool"}
+	controller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"proxies": map[string]any{
+			p.MihomoGroup: map[string]any{"type": "Fallback", "all": []string{"another original", "us8"}, "now": "us8"},
+		}})
+	}))
+	defer controller.Close()
+	var requested []string
+	info := probeMihomoProxy(context.Background(), p, proxyHealthProbeOptions{
+		controllerURL: controller.URL, timeout: time.Second,
+		head: func(_ context.Context, proxyURL, _ string, _ time.Duration) (int64, error) {
+			requested = append(requested, proxyURL)
+			return 12, nil
+		},
+	})
+	require.Equal(t, []string{"socks5h://127.0.0.1:28008", "socks5://127.0.0.1:8124"}, requested)
+	require.Equal(t, ProxyHealthHealthy, info.NodeStatus)
+	require.Equal(t, ProxyHealthHealthy, info.BusinessStatus)
+	require.Equal(t, ProxyHealthUnknown, info.RouteStatus)
+	require.Empty(t, info.PreferredNode)
+	require.Contains(t, info.RouteError, "does not match the original node")
 }
 
 type healthMemoryCache struct {

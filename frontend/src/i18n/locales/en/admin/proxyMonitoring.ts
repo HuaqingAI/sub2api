@@ -21,7 +21,15 @@ export default {
     "expiredHelp": "This result is over 15 minutes old. Run a new check or inspect the scheduled task.",
     "configTitle": "Mihomo original node check",
     "normalProxy": "Standard proxy (test the configured proxy address)",
-    "configHelp": "For a Mihomo proxy in the same Pod, select its original US node. Connectivity and quality checks use that node; business requests use fallback. Choose Standard proxy to clear this setting."
+    "mihomoProxy": "Mihomo (test the original node separately)",
+    "primaryNode": "Original node name",
+    "primaryNodePlaceholder": "For example, us6; match the node name in Mihomo",
+    "testPort": "Original-node SOCKS test port",
+    "testPortPlaceholder": "For example, 17909",
+    "fallbackGroup": "Fallback group name",
+    "fallbackGroupPlaceholder": "For example, us6-fallback",
+    "configHelp": "Enter the original node name, its fixed SOCKS test port, and the fallback group already configured in Mihomo in the same Pod. The original node must be the group's first member. Tests connect to 127.0.0.1 through the test port; business requests keep using the business port above. This form does not change Mihomo configuration. Choose Standard proxy and save to clear these settings.",
+    "invalidConfig": "Enter both names (up to 100 UTF-8 bytes each after trimming) and an integer test port from 1 to 65535 that differs from the business port."
   },
   "proxyTestTasks": {
     "title": "Scheduled proxy checks",

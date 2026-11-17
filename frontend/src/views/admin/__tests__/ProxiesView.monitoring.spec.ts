@@ -3,17 +3,18 @@ import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils'
 import ProxiesView from '../ProxiesView.vue'
 import ProxyHealthCell from '@/components/admin/proxy/ProxyHealthCell.vue'
 import ProxyNodeTestConfig from '@/components/admin/proxy/ProxyNodeTestConfig.vue'
+import type { ProxyNodeTestForm } from '@/utils/proxyMonitoring'
 
-const api = vi.hoisted(() => ({ list: vi.fn(), update: vi.fn(), getAllWithCount: vi.fn(), testProxy: vi.fn(), checkProxyQuality: vi.fn() }))
+const api = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), update: vi.fn(), getAllWithCount: vi.fn(), testProxy: vi.fn(), checkProxyQuality: vi.fn(), showError: vi.fn(), showSuccess: vi.fn() }))
 vi.mock('@/api/admin', () => ({ adminAPI: { proxies: api } }))
-vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: vi.fn(), showSuccess: vi.fn() }) }))
+vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showError: api.showError, showSuccess: api.showSuccess }) }))
 vi.mock('vue-i18n', async importOriginal => ({ ...await importOriginal<typeof import('vue-i18n')>(), useI18n: () => ({ t: (key: string) => key }) }))
 enableAutoUnmount(afterEach)
 const base = { id: 9, name: 'us1', protocol: 'socks5', host: '127.0.0.1', port: 7903, username: '', status: 'active', mihomo_primary_node: 'us1', mihomo_group: 'us1-fallback', node_test_port: 17903, updated_at: '2026-11-17T10:00:00Z' }
 function mountView() {
   return shallowMount(ProxiesView, { global: { stubs: {
     AppLayout: { template: '<div><slot /></div>' },
-    TablePageLayout: { template: '<div><slot name="table" /></div>' },
+    TablePageLayout: { template: '<div><slot name="filters" /><slot name="table" /></div>' },
     DataTable: { inheritAttrs: false, emits: ['sort'], props: ['data'], template: '<div v-for="row in data" :key="row.id"><slot name="cell-node_status" :row="row" /><slot name="cell-preferred_node" :row="row" /><slot name="cell-business_status" :row="row" /><slot name="cell-actions" :row="row" /></div>' },
     BaseDialog: { props: ['show'], template: '<div v-if="show"><slot /><slot name="footer" /></div>' }
   } } })
@@ -24,6 +25,7 @@ beforeEach(() => {
   api.list.mockResolvedValue({ items: [{ ...base }], total: 1, pages: 1 })
   api.getAllWithCount.mockResolvedValue([])
   api.update.mockResolvedValue({})
+  api.create.mockResolvedValue({})
 })
 describe('proxy monitoring integration', () => {
   it('keeps original failure and healthy fallback from one manual result together', async () => {
@@ -35,17 +37,53 @@ describe('proxy monitoring integration', () => {
     expect(cells).toHaveLength(3)
     for (const cell of cells) expect(cell.props('proxy')).toMatchObject({ node_status: 'unhealthy', business_status: 'healthy', preferred_node: 'us2', sampled_pod: 'pod-a' })
   })
-  it('saves the matching raw port and group and clears all metadata together', async () => {
+  it('saves custom node metadata without deriving a port or group and clears it together', async () => {
     const wrapper = mountView(); await flushPromises()
     await button(wrapper, 'common.edit').trigger('click')
     const selector = wrapper.findComponent(ProxyNodeTestConfig)
-    selector.vm.$emit('update:modelValue', 'us3'); await flushPromises()
+    expect(selector.props('modelValue')).toEqual({ enabled: true, node_test_port: 17903, mihomo_primary_node: 'us1', mihomo_group: 'us1-fallback' })
+    selector.vm.$emit('update:modelValue', { enabled: true, node_test_port: 24567, mihomo_primary_node: ' us6 ', mihomo_group: ' US backup pool ' }); await flushPromises()
     await wrapper.get('#edit-proxy-form').trigger('submit'); await flushPromises()
-    expect(api.update).toHaveBeenLastCalledWith(9, expect.objectContaining({ node_test_port: 17906, mihomo_primary_node: 'us3', mihomo_group: 'us3-fallback' }))
+    expect(api.update).toHaveBeenLastCalledWith(9, expect.objectContaining({ port: 7903, node_test_port: 24567, mihomo_primary_node: 'us6', mihomo_group: 'US backup pool' }))
     await button(wrapper, 'common.edit').trigger('click')
-    wrapper.findComponent(ProxyNodeTestConfig).vm.$emit('update:modelValue', ''); await flushPromises()
+    wrapper.findComponent(ProxyNodeTestConfig).vm.$emit('update:modelValue', { enabled: false, node_test_port: 24567, mihomo_primary_node: 'us6', mihomo_group: 'US backup pool' }); await flushPromises()
     await wrapper.get('#edit-proxy-form').trigger('submit'); await flushPromises()
     expect(api.update).toHaveBeenLastCalledWith(9, expect.objectContaining({ node_test_port: null, mihomo_primary_node: '', mihomo_group: '' }))
+  })
+  it.each([
+    ['us1', 17903, 'us1-fallback'], ['us2', 17905, 'us2-fallback'], ['us3', 17906, 'us3-fallback'],
+    ['us4', 17907, 'us4-fallback'], ['us5', 17908, 'us5-fallback'], ['美国出口 6', 25000, '自定义备用组'],
+    ['us1', 25003, 'Shared US pool']
+  ])('preserves saved metadata when editing %s', async (node, port, group) => {
+    api.list.mockResolvedValue({ items: [{ ...base, node_test_port: port, mihomo_primary_node: node, mihomo_group: group }], total: 1, pages: 1 })
+    const wrapper = mountView(); await flushPromises()
+    await button(wrapper, 'common.edit').trigger('click')
+    expect(wrapper.findComponent(ProxyNodeTestConfig).props('modelValue')).toEqual({ enabled: true, node_test_port: port, mihomo_primary_node: node, mihomo_group: group })
+    await wrapper.get('#edit-proxy-form').trigger('submit'); await flushPromises()
+    expect(api.update).toHaveBeenCalledWith(9, expect.objectContaining({ node_test_port: port, mihomo_primary_node: node, mihomo_group: group }))
+  })
+  it('creates a new proxy with an arbitrary node, raw port and group', async () => {
+    const wrapper = mountView(); await flushPromises()
+    await button(wrapper, 'admin.proxies.createProxy').trigger('click')
+    await wrapper.get('#create-proxy-form input[placeholder="admin.proxies.enterProxyName"]').setValue('sixth exit')
+    await wrapper.get('#create-proxy-form input[placeholder="admin.proxies.form.hostPlaceholder"]').setValue('127.0.0.1')
+    await wrapper.get('#create-proxy-form input[placeholder="admin.proxies.form.portPlaceholder"]').setValue(7909)
+    wrapper.findComponent(ProxyNodeTestConfig).vm.$emit('update:modelValue', { enabled: true, node_test_port: 22006, mihomo_primary_node: ' us6 ', mihomo_group: ' Custom pool ' }); await flushPromises()
+    await wrapper.get('#create-proxy-form').trigger('submit'); await flushPromises()
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ port: 7909, node_test_port: 22006, mihomo_primary_node: 'us6', mihomo_group: 'Custom pool' }))
+  })
+  it.each<Partial<ProxyNodeTestForm>>([
+    { mihomo_primary_node: ' ' }, { mihomo_group: '' }, { mihomo_primary_node: 'n'.repeat(101) }, { mihomo_group: '组'.repeat(34) },
+    { node_test_port: null }, { node_test_port: 0 }, { node_test_port: 65536 }, { node_test_port: 1.5 }, { node_test_port: 7903 }
+  ])('blocks an invalid node configuration before sending updates: %j', async invalid => {
+    const wrapper = mountView(); await flushPromises()
+    await button(wrapper, 'common.edit').trigger('click')
+    wrapper.findComponent(ProxyNodeTestConfig).vm.$emit('update:modelValue', {
+      enabled: true, node_test_port: 17903, mihomo_primary_node: 'us1', mihomo_group: 'us1-fallback', ...invalid
+    }); await flushPromises()
+    await wrapper.get('#edit-proxy-form').trigger('submit'); await flushPromises()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(api.showError).toHaveBeenCalledWith('admin.proxyMonitoring.invalidConfig')
   })
   it('quality checks do not replace the three-column connectivity snapshot', async () => {
     const checkedAt = new Date().toISOString()
