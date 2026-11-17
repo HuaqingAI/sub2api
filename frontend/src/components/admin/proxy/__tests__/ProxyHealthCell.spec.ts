@@ -35,13 +35,19 @@ describe('original node and fallback health display', () => {
     expect(cell('node', values).get('span.badge').text()).toBe('正常')
     expect(cell('business', values).get('span.badge').text()).toBe('可用')
   })
-  it('marks manual selection explicitly and expires all sampled results', () => {
+  it('marks manual selection explicitly', () => {
     expect(cell('route', { ...snapshot, route_fixed: true }).text()).toContain('us2（手动指定）')
-    for (const kind of ['node', 'business', 'route'] as const) {
-      const stale = cell(kind, snapshot, now + 15 * 60_000)
-      expect(stale.get('span.badge').text()).toBe('已过期')
-      expect(stale.get('span.badge').classes()).not.toContain('badge-success')
-    }
+  })
+  it.each([
+    ['node', '故障'], ['business', '可用'], ['route', 'us2（备用）']
+  ] as const)('keeps %s results fresh for one hour and expires them afterward', (kind, expected) => {
+    const expiry = Date.parse(checkedAt) + 60 * 60_000
+    expect(cell(kind, snapshot, expiry - 1).get('span.badge').text()).toBe(expected)
+    expect(cell(kind, snapshot, expiry).get('span.badge').text()).toBe(expected)
+    const stale = cell(kind, snapshot, expiry + 1)
+    expect(stale.get('span.badge').text()).toBe('已过期')
+    expect(stale.get('span.badge').classes()).not.toContain('badge-success')
+    expect(stale.get('div').attributes('title')).toContain('检测结果已超过 1 小时')
   })
   it('does not infer business availability from an all-failed group preferred node', () => {
     const values = { ...snapshot, preferred_node: 'us1', is_backup: false, business_status: 'unhealthy' as const }

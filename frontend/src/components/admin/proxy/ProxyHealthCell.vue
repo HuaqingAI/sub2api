@@ -27,7 +27,7 @@ const { t } = useI18n()
 const checkedAt = computed(() => props.kind === 'node' ? props.proxy.node_checked_at
   : props.kind === 'business' ? props.proxy.business_checked_at : props.proxy.route_checked_at)
 const expired = computed(() => Boolean(checkedAt.value) &&
-  (!Number.isFinite(Date.parse(checkedAt.value!)) || props.now - Date.parse(checkedAt.value!) > 15 * 60_000))
+  (!Number.isFinite(Date.parse(checkedAt.value!)) || props.now - Date.parse(checkedAt.value!) > 60 * 60_000))
 const notApplicable = computed(() => props.kind === 'route' &&
   (props.proxy.route_status === 'not_applicable' ||
     (!props.proxy.mihomo_group && !props.proxy.mihomo_primary_node && props.proxy.node_test_port == null && !props.proxy.route_status)))

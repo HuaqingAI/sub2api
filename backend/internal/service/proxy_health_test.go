@@ -34,8 +34,13 @@ func TestMihomoProxyOriginalFailureDoesNotHideBehindBackup(t *testing.T) {
 	p := healthTestProxy()
 	controller := healthTestController(t, "us2", "")
 	var paths []string
+	var geoCalls atomic.Int32
 	opts := defaultProxyHealthProbeOptions()
 	opts.controllerURL = controller.URL
+	opts.exitInfo = func(context.Context, string) (*ProxyExitInfo, int64, error) {
+		geoCalls.Add(1)
+		return &ProxyExitInfo{IP: "192.0.2.2", CountryCode: "US"}, 0, nil
+	}
 	opts.head = func(_ context.Context, proxyURL, target string, _ time.Duration) (int64, error) {
 		paths = append(paths, proxyURL)
 		require.Equal(t, proxyHealthTargetURL, target)
@@ -55,6 +60,9 @@ func TestMihomoProxyOriginalFailureDoesNotHideBehindBackup(t *testing.T) {
 	require.NotNil(t, info.BusinessCheckedAt)
 	require.NotNil(t, info.RouteCheckedAt)
 	require.NotEmpty(t, info.SampleID)
+	require.Zero(t, geoCalls.Load(), "a failed original node must not borrow geolocation from the fallback entry")
+	require.Empty(t, info.IPAddress)
+	require.Empty(t, info.CountryCode)
 }
 
 func TestMihomoControllerFailureOnlyMakesRouteUnknown(t *testing.T) {
@@ -70,6 +78,143 @@ func TestMihomoControllerFailureOnlyMakesRouteUnknown(t *testing.T) {
 	require.Equal(t, ProxyHealthUnknown, info.RouteStatus)
 	require.Empty(t, info.PreferredNode)
 	require.Contains(t, info.RouteError, "401")
+}
+
+func TestMihomoOriginalNodeGeolocationRunsAlongsideBusinessProbe(t *testing.T) {
+	p := healthTestProxy()
+	controller := healthTestController(t, "us1", "")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	geoStarted := make(chan string, 1)
+	businessStarted := make(chan struct{})
+	opts := defaultProxyHealthProbeOptions()
+	opts.controllerURL = controller.URL
+	opts.exitInfo = func(ctx context.Context, proxyURL string) (*ProxyExitInfo, int64, error) {
+		geoStarted <- proxyURL
+		select {
+		case <-businessStarted:
+			return &ProxyExitInfo{IP: "192.0.2.7", Country: "United States", CountryCode: "US", Region: "California", City: "Los Angeles"}, 9999, nil
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		}
+	}
+	opts.head = func(ctx context.Context, proxyURL, _ string, _ time.Duration) (int64, error) {
+		if proxyURL == p.URL() {
+			select {
+			case geoURL := <-geoStarted:
+				require.Equal(t, p.NodeTestURL(), geoURL, "geolocation must use the raw listener, never the fallback entry")
+				close(businessStarted)
+			case <-ctx.Done():
+				return 0, ctx.Err()
+			}
+		}
+		return 12, nil
+	}
+	info := probeMihomoProxy(ctx, p, opts)
+	require.NoError(t, ctx.Err(), "geolocation and the business check must not wait for each other sequentially")
+	require.True(t, info.Success)
+	require.EqualValues(t, 12, *info.LatencyMs, "IP lookup latency must not replace the original-node HEAD latency")
+	require.Equal(t, ProxyHealthHealthy, info.NodeStatus)
+	require.Equal(t, ProxyHealthHealthy, info.BusinessStatus)
+	require.Equal(t, "192.0.2.7", info.IPAddress)
+	require.Equal(t, "United States", info.Country)
+	require.Equal(t, "US", info.CountryCode)
+	require.Equal(t, "California", info.Region)
+	require.Equal(t, "Los Angeles", info.City)
+	result := proxyTestResultFromSnapshot(info)
+	require.Equal(t, info.IPAddress, result.IPAddress)
+	require.Equal(t, info.Country, result.Country)
+	require.Equal(t, info.City, result.City)
+}
+
+func TestMihomoGeolocationFailureDoesNotChangeHealthyConnectivity(t *testing.T) {
+	controller := healthTestController(t, "us1", "")
+	for _, outcome := range []string{"failure", "timeout", "empty"} {
+		t.Run(outcome, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			opts := defaultProxyHealthProbeOptions()
+			opts.controllerURL, opts.timeout = controller.URL, 20*time.Millisecond
+			opts.head = func(context.Context, string, string, time.Duration) (int64, error) { return 12, nil }
+			opts.exitInfo = func(ctx context.Context, _ string) (*ProxyExitInfo, int64, error) {
+				switch outcome {
+				case "failure":
+					return &ProxyExitInfo{IP: "192.0.2.99"}, 0, errors.New("geolocation provider unavailable")
+				case "timeout":
+					<-ctx.Done()
+					return nil, 0, ctx.Err()
+				default:
+					return nil, 0, nil
+				}
+			}
+			info := probeMihomoProxy(ctx, healthTestProxy(), opts)
+			require.NoError(t, ctx.Err(), "optional lookup must have its own bounded deadline")
+			require.True(t, info.Success)
+			require.Equal(t, ProxyHealthHealthy, info.NodeStatus)
+			require.Equal(t, ProxyHealthHealthy, info.BusinessStatus)
+			require.Equal(t, ProxyHealthHealthy, info.RouteStatus)
+			require.EqualValues(t, 12, *info.LatencyMs)
+			require.Empty(t, info.IPAddress)
+			require.Empty(t, info.Country)
+		})
+	}
+}
+
+func TestMihomoFailedOriginalDoesNotUseBackupGeolocation(t *testing.T) {
+	p := healthTestProxy()
+	controller := healthTestController(t, "us2", "")
+	opts := defaultProxyHealthProbeOptions()
+	opts.controllerURL = controller.URL
+	opts.head = func(_ context.Context, proxyURL, _ string, _ time.Duration) (int64, error) {
+		if proxyURL == p.NodeTestURL() {
+			return 0, errors.New("original node unavailable")
+		}
+		return 12, nil
+	}
+	var geoCalls atomic.Int32
+	opts.exitInfo = func(context.Context, string) (*ProxyExitInfo, int64, error) {
+		geoCalls.Add(1)
+		return &ProxyExitInfo{IP: "192.0.2.8", CountryCode: "US"}, 0, nil
+	}
+	info := probeMihomoProxy(context.Background(), p, opts)
+	require.Zero(t, geoCalls.Load())
+	require.False(t, info.Success)
+	require.Equal(t, ProxyHealthUnhealthy, info.NodeStatus)
+	require.Equal(t, ProxyHealthHealthy, info.BusinessStatus)
+	require.Equal(t, "us2", info.PreferredNode)
+	require.True(t, info.IsBackup)
+	require.Empty(t, info.IPAddress)
+	require.Empty(t, info.CountryCode)
+}
+
+func TestMihomoGeolocationCompletedBeforeDeadlineSurvivesSlowerBusinessProbe(t *testing.T) {
+	p := healthTestProxy()
+	controller := healthTestController(t, "us1", "")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	geoCtxReady := make(chan context.Context, 1)
+	opts := defaultProxyHealthProbeOptions()
+	opts.controllerURL, opts.timeout = controller.URL, 50*time.Millisecond
+	opts.exitInfo = func(ctx context.Context, _ string) (*ProxyExitInfo, int64, error) {
+		geoCtxReady <- ctx
+		return &ProxyExitInfo{IP: "192.0.2.7", CountryCode: "US"}, 0, nil
+	}
+	opts.head = func(ctx context.Context, proxyURL, _ string, _ time.Duration) (int64, error) {
+		if proxyURL == p.URL() {
+			select {
+			case geoCtx := <-geoCtxReady:
+				<-geoCtx.Done()
+			case <-ctx.Done():
+				return 0, ctx.Err()
+			}
+		}
+		return 12, nil
+	}
+	info := probeMihomoProxy(ctx, p, opts)
+	require.NoError(t, ctx.Err())
+	require.True(t, info.Success)
+	require.Equal(t, "192.0.2.7", info.IPAddress)
+	require.Equal(t, "US", info.CountryCode)
 }
 
 func TestMihomoControllerSwitchingAndManualSelection(t *testing.T) {
@@ -326,7 +471,7 @@ func TestProxyProbeConfigVersionMatchesPostgresTimestampRoundtrip(t *testing.T) 
 func TestProxyHealthCacheExpiresColumnsIndependently(t *testing.T) {
 	p := healthTestProxy()
 	info := newProxyProbeSnapshot(p)
-	fresh, old := time.Now(), time.Now().Add(-16*time.Minute)
+	fresh, old := time.Now().Add(-30*time.Minute), time.Now().Add(-61*time.Minute)
 	info.NodeStatus, info.BusinessStatus, info.RouteStatus = ProxyHealthHealthy, ProxyHealthHealthy, ProxyHealthHealthy
 	info.NodeCheckedAt, info.BusinessCheckedAt, info.RouteCheckedAt = &fresh, &fresh, &old
 	info.PreferredNode, info.IsBackup = "us2", true

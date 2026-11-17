@@ -25,7 +25,7 @@ const (
 	ProxyHealthUnknown      = "unknown"
 	ProxyRouteNotApplicable = "not_applicable"
 	ProxyRouteSwitching     = "switching"
-	ProxyHealthMaxAge       = 15 * time.Minute
+	ProxyHealthMaxAge       = time.Hour
 	proxyHealthTargetURL    = "https://cp.cloudflare.com/generate_204"
 	proxyControllerURL      = "http://127.0.0.1:9090/proxies"
 )
@@ -104,6 +104,7 @@ type proxyHealthProbeOptions struct {
 	controllerURL string
 	timeout       time.Duration
 	head          func(context.Context, string, string, time.Duration) (int64, error)
+	exitInfo      func(context.Context, string) (*ProxyExitInfo, int64, error)
 }
 
 func defaultProxyHealthProbeOptions() proxyHealthProbeOptions {
@@ -157,6 +158,26 @@ func probeMihomoProxy(ctx context.Context, p *Proxy, opts proxyHealthProbeOption
 	if ctx.Err() != nil {
 		info.NodeStatus, info.Success = ProxyHealthUnknown, false
 	}
+	// Geographic metadata is optional and must come from the original listener.
+	// Run it alongside the business probe so a slow geolocation provider neither
+	// changes node health nor adds a third probe timeout to the task's budget.
+	var exitResult <-chan *ProxyExitInfo
+	var exitCtx context.Context
+	if info.NodeStatus == ProxyHealthHealthy && opts.exitInfo != nil {
+		var cancel context.CancelFunc
+		exitCtx, cancel = context.WithTimeout(ctx, opts.timeout)
+		defer cancel()
+		results := make(chan *ProxyExitInfo, 1)
+		exitResult = results
+		originalURL := p.NodeTestURL()
+		go func() {
+			exitInfo, _, err := opts.exitInfo(exitCtx, originalURL)
+			if err != nil || exitCtx.Err() != nil {
+				exitInfo = nil
+			}
+			results <- exitInfo
+		}()
+	}
 	businessLatency, businessErr := opts.head(ctx, p.URL(), opts.targetURL, opts.timeout)
 	businessChecked := time.Now().UTC()
 	info.BusinessCheckedAt = &businessChecked
@@ -182,6 +203,23 @@ func probeMihomoProxy(ctx context.Context, p *Proxy, opts proxyHealthProbeOption
 	default:
 		info.RouteStatus, info.PreferredNode, info.RouteFixed = ProxyHealthHealthy, after.now, after.fixed
 		info.IsBackup = after.now != p.MihomoPrimaryNode
+	}
+	if exitResult != nil {
+		var exitInfo *ProxyExitInfo
+		select {
+		case exitInfo = <-exitResult:
+		case <-exitCtx.Done():
+			// Prefer metadata that finished within its deadline even if the
+			// business/controller checks completed after that deadline.
+			select {
+			case exitInfo = <-exitResult:
+			default:
+			}
+		}
+		if exitInfo != nil {
+			info.IPAddress, info.Country, info.CountryCode = exitInfo.IP, exitInfo.Country, exitInfo.CountryCode
+			info.Region, info.City = exitInfo.Region, exitInfo.City
+		}
 	}
 	info.UpdatedAt = time.Now().UTC()
 	return info

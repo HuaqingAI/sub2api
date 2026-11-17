@@ -257,7 +257,11 @@ func (s *adminServiceImpl) TestProxy(ctx context.Context, id int64) (*ProxyTestR
 
 func (s *adminServiceImpl) refreshProxyHealth(ctx context.Context, proxy *Proxy) *ProxyLatencyInfo {
 	if proxy.HasNodeTestConfig() {
-		return probeMihomoProxy(ctx, proxy, proxyHealthOptionsForContext(ctx))
+		opts := proxyHealthOptionsForContext(ctx)
+		if s.proxyProber != nil {
+			opts.exitInfo = s.proxyProber.ProbeProxy
+		}
+		return probeMihomoProxy(ctx, proxy, opts)
 	}
 	info := newProxyProbeSnapshot(proxy)
 	info.RouteStatus = ProxyRouteNotApplicable
