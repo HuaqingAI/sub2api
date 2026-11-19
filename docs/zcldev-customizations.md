@@ -191,6 +191,40 @@
 - 未自动修改历史账号配置。若部署中存在 identity 白名单使用 `*` 的无效记录，应改用精确模型名或合法的别名源通配符。
 - 本次本机验证日志与升级前未提交文件快照保存在 `.git/zcldev-upgrade-v0.2.22/`，不进入仓库历史；本文保存可随提交查阅的验收结论。
 
+### v0.2.23 合并与定制核对（2026-11-19）
+
+- 目标仓库：`https://github.com/Wei-Shaw/sub2api.git`。`v0.2.23` 为 annotated tag，tag 对象为 `ce19a640eab5c4b5ef1827c7c1fcfce49569411a`，解引用提交为 `5af9afb588c4b014b3df9db7d4073af1f8ae01b6`。
+- 升级前 `zcldev` HEAD：`3bba29d4d161bee6ed1a97893f8ebe882e135f9d`，工作区干净；备份分支：`backup/zcldev-before-v0.2.23-20261119`。使用 `git merge --no-ff --no-commit v0.2.23` 合并，通过验证后创建双亲 merge 提交。
+- 本次没有文本冲突，也未发现需调整定制实现的语义冲突。对照升级前相对 `v0.2.22` 的全部 **111 个差异文件**，自动合并没有改动其中任何文件；随后仅主动更新内嵌版本号及本文升级记录。代码、测试、部署相关配置及 `.gitignore` 白名单均保留。
+- 上游 tag 的 `backend/cmd/server/VERSION` 仍为 `0.2.22`；本地合并后不处于该 tag 的精确 checkout，版本解析会回退到此文件，因此将其修正为 `0.2.23`。
+- 五项定制均继续使用原有效实现，无需由上游等效实现替代；上游 GPT-6.2 Sol/Astra、Ultra Fast 定价、缓存 TTL 用量/计费修复及流式空闲切换等改动全部保留。共享 `useModelWhitelist` 只增加新模型预设，不改变本地批量映射规则。
+
+| 定制项 | 核对与验证结果 |
+|---|---|
+| C01：Request ID | 输入 trim、用量及两个错误入口转发、精确匹配、独立列、默认可见性、列设置持久化及与 C04 联动均保留。相关 handler/repository 测试通过；与 C04 共 3 个前端文件、24 项通过。 |
+| C02：关闭等待时间 | 代码与升级前一致；`TestParseShutdownTimeout` 通过，覆盖默认值、空白、合法时长、非法值、零与负数。核对有效结果接入 `context.WithTimeout` 和 `Server.Shutdown`，非法非空值记录日志。 |
+| C03：批量映射 | 三种模式、源通配符与 identity 校验、默认映射保护、逐账号 JSONB 锁和 outbox、保留各自白名单、无变化及其他字段更新、逐账号统计和失败结果、同步草稿与替换确认均保留。handler/service 测试通过；前端定制 3 文件、115 项通过，共享 composable 另 26 项通过；真实 PostgreSQL 两个指定集成子用例通过，0 skip。 |
+| C04：账号报错统计 | API/权限、共享筛选与 SQL、`COUNT(*)`、排除空账号、客户端可见错误及 `cyber_policy` 特例、分类排序和名称回退均保留。页面日期/筛选联动、请求序号保护、失败清空、加载及空态已核对；handler/repository 与前端测试通过。 |
+| C05：Mihomo 与邮件 | 任意节点配置、三列状态、原节点 IP/位置、1 小时有效期、缓存版本、独立探测、任务预算、手动周期隔离、告警及收件人重试、会话锁、导入导出和绑定关系均保留。前端 4 文件、36 项通过；真实 PostgreSQL 4 项通过，0 skip，覆盖元数据往返、迁移幂等、任务 CRUD、并发唯一性、编辑/执行串行、取消释放锁及手动周期隔离。 |
+
+### v0.2.23 迁移、生成代码与验证范围
+
+- 本地 `251_proxy_test_tasks.sql` 的文件名及内容保持不变；上游新增 `252_channel_pricing_ultrafast_multiplier.sql` 只修改渠道价格表，与本地迁移无冲突。原版 repository integration harness 在临时 PostgreSQL 18.1 / Redis 8.4 中成功执行全部 **306 个 SQL 迁移**。额外通过上游两个 Ultra Fast 定价集成测试，验证迁移可重复执行、保留原配置及新倍率 CRUD/非法值回滚；连同 C03 共 4 个目标用例，0 fail、0 skip。
+- Ent schema/生成代码、Wire 声明/生成代码及依赖文件相对升级前均无变化，无须重新生成；保留上一轮已验证一致的本地接线与停止逻辑。
+- 前端定制回归共 **175 项通过**；根 Makefile 指定的 31 个 CI 关键文件 **599 项通过**，额外上游变更的 3 个文件 **50 项通过**。`lint:check`、`typecheck`、生产 `build` 均通过。C03 共享 composable 的 26 项已包含于 599 项，不重复计数。
+- Linux 完整 repository unit：711 个顶层测试、含子项 **1249 PASS，0 FAIL，0 SKIP**，包括 C05 的 4 项真实 PostgreSQL 测试及 Windows 缺少 `sh` 的 PgDumper 用例。Linux sysutil 的 3 个顶层及 9 个子用例全部通过，补验 Windows 符号链接权限受限场景。
+- Windows 全量 unit 的 **61 个测试包通过**，含子项 **29678 PASS，0 FAIL，46 SKIP**；另 50 个包无测试文件。使用 Go 1.27.4，命令为 `go test -json -tags=unit -skip '^(TestCgroupMemoryLimit|TestPgDumperHoldsMigrationLockThroughReaderClose|TestPgDumperReleasesMigrationLockWhenProcessFails|TestPgDumperReportsUnlockFailureAndDiscardsConnection)$' ./...`，显式排除的四项已由上述 Linux 测试补验。46 项既有条件跳过涉及独立数据库/Redis、外部凭据、平台权限、仅生产历史数据或本地插件包；其中 repository 的 20 项已在 Linux 完整 unit 中真实执行并通过，其余条件跳过不在通过声明范围内，详细原因见本次 `backend-unit-summary.json`。
+- Windows/amd64 与 Linux/amd64（`CGO_ENABLED=0`）均通过 `go build -tags embed -trimpath`，包含本次前端生产构建；两平台实际执行 `server -version` 均显示 **0.2.23**，源码版本解析脚本也返回 `0.2.23`。
+- 与 CI 同版本的 `golangci-lint v2.14.0`（Go 1.27.4）检查为 **0 issues**。部署安全、Gateway 环境变量、运行资源、Caddy 缓存及 simple mode 五个 shell 检查通过；检查使用隔离副本将文本转换为 LF，避免 Windows `.gitattributes` 导出的 CRLF 影响逐行匹配，未修改实际部署文件。
+- 数据库测试容器及其匿名卷均已清理，原有容器保留。未运行完整 `-tags=integration ./...`；本次真实数据库验证范围仅为上述指定用例及完整 repository unit。
+
+### v0.2.23 待实机确认项
+
+- 真实 Mihomo 监听器、控制器组名及账户业务端口绑定、原节点断链后 fallback 接管、真实 SMTP 告警/恢复/失败收件人重试、重启和多 Pod 行为仍需隔离部署验收；本次没有运行生产探测或投递真实通知。
+- 管理页面真实数据与错误明细比对、浏览器刷新后的列设置、快速连续筛选与接口故障，以及真实多账号模型映射操作仍需实机验收。
+- 在途请求下的 SIGTERM 关闭行为、`SHUTDOWN_TIMEOUT` 与容器终止宽限期仍需运行环境确认；未自动修改历史账号或部署配置。
+- 本次验证日志、差异文件 blob 核对、隔离数据库说明及执行脚本保存在 `.git/zcldev-upgrade-v0.2.23/`；本文记录可随提交查阅的结果。
+
 ## 以后升级可复用的提示词
 
 > 将上游仓库 https://github.com/Wei-Shaw/sub2api 的 `<目标 tag，例如 v0.2.22>` 通过 merge 合并到本地 `zcldev` 分支。
